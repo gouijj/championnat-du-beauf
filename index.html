@@ -193,6 +193,22 @@ button { font: inherit; cursor: pointer; }
 .sbar i:first-child { background: var(--led); }
 .sbar i:last-child { background: var(--red); }
 .stxt { text-align: center; font-weight: 700; color: var(--chalk-dim); }
+.who { background: var(--chalk); color: var(--ink); border-radius: 4px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35); }
+.who label { font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--red); font-size: 0.85rem; }
+.whorow { display: flex; gap: 8px; flex-wrap: wrap; }
+.whorow input {
+  flex: 1 1 180px; min-width: 0; font: 700 1.25rem var(--f-body); padding: 10px 12px;
+  border: 2px solid var(--ink); border-radius: 3px; background: #fffdf5; color: var(--ink);
+}
+.whomsg { margin: 0; font-weight: 600; }
+.whomsg.err { color: var(--red); font-weight: 800; }
+.feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.feed li { padding: 7px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.feed li:last-child { border-bottom: 0; }
+.feed .p { color: var(--led); font-weight: 800; }
+.feed .m { color: var(--muted); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.svoters { display: flex; flex-direction: column; gap: 2px; font-size: 0.98rem; color: var(--chalk-dim); }
+.svoters b { color: var(--chalk); }
 .top-n { color: var(--led); font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* Annonce de tour */
@@ -285,24 +301,31 @@ const firebaseConfig = {
 if (firebaseConfig.apiKey) {
   try {
     const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
-    const { getFirestore, doc, setDoc, getDoc, increment, collection, query, orderBy, limit, getDocs } =
+    const { getFirestore, doc, setDoc, getDoc, addDoc, increment, arrayUnion, serverTimestamp, collection, query, orderBy, limit, getDocs, onSnapshot } =
       await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
     const db = getFirestore(initializeApp(firebaseConfig));
     const enc = s => encodeURIComponent(s);
     window.cdbStore = {
-      async vote(a, b, winner) {
+      async vote(a, b, winner, pseudo, mode) {
         const [x, y] = [a, b].sort();
+        const left = winner === x;
         const ref = doc(db, "duels", enc(x) + "__" + enc(y));
-        await setDoc(ref, { a: x, b: y, [winner === x ? "ca" : "cb"]: increment(1) }, { merge: true });
+        await setDoc(ref, { a: x, b: y, [left ? "ca" : "cb"]: increment(1), [left ? "va" : "vb"]: arrayUnion(pseudo) }, { merge: true });
+        addDoc(collection(db, "feed"), { p: pseudo, w: winner, l: winner === a ? b : a, m: mode, t: serverTimestamp() }).catch(() => {});
         const d = (await getDoc(ref)).data() || {};
-        return { [x]: d.ca || 0, [y]: d.cb || 0 };
+        return { counts: { [x]: d.ca || 0, [y]: d.cb || 0 }, voters: { [x]: d.va || [], [y]: d.vb || [] } };
       },
       async champion(mode, name) {
         await setDoc(doc(db, "champs", mode, "names", enc(name)), { mode, name, titles: increment(1) }, { merge: true });
         const snap = await getDocs(query(collection(db, "champs", mode, "names"), orderBy("titles", "desc"), limit(10)));
         return snap.docs.map(d => ({ name: d.data().name, titles: d.data().titles }));
       },
+      watchFeed(cb) {
+        return onSnapshot(query(collection(db, "feed"), orderBy("t", "desc"), limit(25)),
+          snap => cb(snap.docs.map(d => d.data())), () => {});
+      },
     };
+    window.dispatchEvent(new Event("cdb-ready"));
   } catch (e) { window.cdbStore = null; }
 }
 </script>
@@ -316,6 +339,14 @@ if (firebaseConfig.apiKey) {
 
   <!-- ACCUEIL -->
   <section id="menu" class="screen" style="gap:18px">
+    <div class="who">
+      <label for="pseudo">Ton blase</label>
+      <div class="whorow">
+        <input id="pseudo" maxlength="20" autocomplete="nickname" placeholder="Ex. Kévin du 93">
+        <button class="btn" id="pseudook">C'est moi</button>
+      </div>
+      <p class="whomsg" id="whomsg">Ton pseudo s'affiche à côté de tes votes, pour que les potes sachent qui a des goûts de chiotte.</p>
+    </div>
     <div class="modes">
       <article class="ticket">
         <span class="kicker">Mode 1 · Tableau final</span>
@@ -344,6 +375,10 @@ if (firebaseConfig.apiKey) {
         <p>Comme la colline : celui qui gagne reste sur le trône. Sangoku, Dark Vador, Harley Quinn, Thanos et les actrices qui les jouent.</p>
         <div class="btns"><button class="btn" id="geek">Coup d'envoi</button></div>
       </article>
+    </div>
+    <div class="panel" id="feedpanel" hidden>
+      <h3 class="led">Le mur des potes</h3>
+      <ol class="feed" id="feed"></ol>
     </div>
     <p class="rules">Tu cliques sur celui ou celle qui te fait le plus kiffer. Pas de mauvaise réponse. Enfin si.</p>
   </section>
@@ -389,6 +424,7 @@ if (firebaseConfig.apiKey) {
       <div class="slabels"><span id="spa"></span><span id="spb"></span></div>
       <div class="sbar"><i id="sba"></i><i id="sbb"></i></div>
       <div class="stxt" id="stxt"></div>
+      <div class="svoters" id="svoters"></div>
     </div>
     <div class="next" id="nextwrap" hidden><button class="btn go" id="next">Match suivant ▸</button></div>
   </section>
@@ -433,8 +469,50 @@ const store = () => window.cdbStore || null;
 
 async function recordVote(mode, a, b, winner) {
   const st = store(); if (!st) return null;
-  try { return await st.vote(a, b, winner); } catch (e) { return null; }
+  try { return await st.vote(a, b, winner, PSEUDO, mode); } catch (e) { return null; }
 }
+
+/* ---------- PSEUDO ---------- */
+let PSEUDO = "";
+try { PSEUDO = (localStorage.getItem("cdb-pseudo") || "").slice(0, 20); } catch (e) {}
+const MODE_LABEL = { cup: "Coupe", hill: "Colline", decon: "Déconstruit", geek: "Geek" };
+
+function savePseudo() {
+  const v = document.getElementById("pseudo").value.replace(/\s+/g, " ").trim().slice(0, 20);
+  const msg = document.getElementById("whomsg");
+  if (!v) { msg.className = "whomsg err"; msg.textContent = "Mets ton pseudo d'abord, champion."; document.getElementById("pseudo").focus(); return false; }
+  PSEUDO = v;
+  try { localStorage.setItem("cdb-pseudo", v); } catch (e) {}
+  msg.className = "whomsg"; msg.textContent = "C'est noté, " + v + ". Choisis ton mode.";
+  return true;
+}
+
+function needPseudo() {
+  return !savePseudo();
+}
+
+/* ---------- MUR DES POTES ---------- */
+let feedStarted = false;
+function startFeed() {
+  const st = store();
+  if (!st || feedStarted) return;
+  feedStarted = true;
+  st.watchFeed(items => {
+    const ol = document.getElementById("feed"); ol.innerHTML = "";
+    items.forEach(it => {
+      if (!it || !it.p || !it.w) return;
+      const li = document.createElement("li");
+      const p = document.createElement("span"); p.className = "p"; p.textContent = it.p;
+      const w = document.createElement("span"); w.className = "w"; w.textContent = it.w;
+      const l = document.createElement("span"); l.className = "l"; l.textContent = it.l || "";
+      const m = document.createElement("span"); m.className = "m"; m.textContent = MODE_LABEL[it.m] ? " · " + MODE_LABEL[it.m] : "";
+      li.append(p, document.createTextNode(" a choisi "), w, document.createTextNode(" contre "), l, m);
+      ol.appendChild(li);
+    });
+    document.getElementById("feedpanel").hidden = !ol.children.length;
+  });
+}
+window.addEventListener("cdb-ready", startFeed);
 
 async function recordChampion(mode, name) {
   const st = store(); if (!st) return null;
@@ -661,6 +739,7 @@ function show(id) {
 }
 
 function start(mode, size) {
+  if (needPseudo()) return;
   clearTimeout(hesTimer); clearTimeout(nextTimer);
   S = { mode, size, done: 0, history: [], clingy: gamesPlayed(false) >= 3 };
   if (mode === "cup") {
@@ -774,13 +853,23 @@ function vote(side) {
   nextTimer = setTimeout(goNext, store() ? 3400 : 2400);
 
   const view = S.view;
-  recordVote(S.mode, m.a, m.b, w).then(counts => {
-    if (!counts || !S || S.view !== view || $("game").hidden) return;
-    showStats(m, w, counts);
+  recordVote(S.mode, m.a, m.b, w).then(res => {
+    if (!res || !S || S.view !== view || $("game").hidden) return;
+    showStats(m, w, res.counts, res.voters);
   });
 }
 
-function showStats(m, w, counts) {
+function voterLine(name, list) {
+  const div = document.createElement("div");
+  const b = document.createElement("b"); b.textContent = name;
+  const names = (list || []).slice(-6).reverse();
+  const extra = (list || []).length - names.length;
+  let txt = names.length ? names.join(", ") + (extra > 0 ? " et " + extra + " autre" + (extra > 1 ? "s" : "") : "") : "personne, la honte";
+  div.append(document.createTextNode("Pour "), b, document.createTextNode(" : " + txt));
+  return div;
+}
+
+function showStats(m, w, counts, voters) {
   const ca = counts[m.a] || 0, cb = counts[m.b] || 0, tot = ca + cb;
   if (!tot) return;
   const pa = Math.round(ca / tot * 100), pb = 100 - pa;
@@ -795,6 +884,8 @@ function showStats(m, w, counts) {
   else if (mine >= 50) t = mine + " % des potes sont d'accord avec toi (" + tot + " votes). T'es normal, bravo.";
   else t = "Seulement " + mine + " % sont d'accord avec toi (" + tot + " votes). Remets-toi en question.";
   $("stxt").textContent = t;
+  const sv = $("svoters"); sv.innerHTML = "";
+  if (voters) { sv.append(voterLine(m.a, voters[m.a]), voterLine(m.b, voters[m.b])); }
   $("stats").hidden = false;
 }
 
@@ -854,7 +945,7 @@ function finish() {
     share = info.emoji + " " + info.name + " · Championnat du Beauf\nÀ la fin des 15 matchs : " + S.queen + " (" + plural(S.streak, "victoire") + " d'affilée).\nRecord de la partie : " + S.best.name + " avec " + S.best.streak + ".\nOn en parle ?";
   }
   $("endk").textContent = k; $("champ").textContent = champ; $("endquote").textContent = quote; $("endsub").textContent = sub;
-  $("sharetxt").value = share; $("copyok").textContent = "";
+  $("sharetxt").value = share + (PSEUDO ? "\n— " + PSEUDO : ""); $("copyok").textContent = "";
   $("toppanel").hidden = true;
   show("end");
 
@@ -897,6 +988,11 @@ function renderBracket() {
 }
 
 /* ---------- BRANCHEMENTS ---------- */
+$("pseudo").value = PSEUDO;
+if (PSEUDO) { $("whomsg").textContent = "Content de te revoir, " + PSEUDO + ". Choisis ton mode."; }
+$("pseudook").onclick = savePseudo;
+$("pseudo").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); savePseudo(); } });
+startFeed();
 $("cup-full").onclick = () => start("cup", 16);
 $("cup-short").onclick = () => start("cup", 8);
 $("hill").onclick = () => start("hill");
