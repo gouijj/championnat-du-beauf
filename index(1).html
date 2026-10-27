@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Championnat du Beauf</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,700;1,800&display=swap">
+<style>
+/* Layout : stade de nuit — pelouse tondue en bandes, tableau d'affichage LED à l'accueil, duels comme des cartons de joueurs, commentateur en bandeau télé. Thème sombre unique, assumé. */
+:root {
+  --pitch: #0f3a20;
+  --pitch-2: #134427;
+  --night: #07140c;
+  --chalk: #f4f1e4;
+  --chalk-dim: #c9d6c6;
+  --led: #ffc21a;
+  --red: #e0262e;
+  --ink: #0b1d11;
+  --muted: #8fb09a;
+  --line: rgba(244, 241, 228, 0.18);
+  --f-display: "Bungee", "Impact", "Arial Black", sans-serif;
+  --f-body: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(120% 70% at 50% -10%, rgba(255, 246, 200, 0.16), transparent 60%),
+    repeating-linear-gradient(90deg, var(--pitch) 0 72px, var(--pitch-2) 72px 144px);
+  background-color: var(--pitch);
+  color: var(--chalk);
+  font-family: var(--f-body);
+  font-size: 18px;
+  line-height: 1.35;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+.wrap { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+.screen { display: flex; flex-direction: column; gap: 16px; }
+button { font: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid var(--led); outline-offset: 3px; }
+
+/* Tableau d'affichage (accueil seulement) */
+.board {
+  background-color: var(--night);
+  background-image: radial-gradient(rgba(255, 194, 26, 0.09) 1px, transparent 1.4px);
+  background-size: 6px 6px;
+  border: 3px solid #26302a;
+  border-radius: 6px;
+  padding: 18px 18px 14px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  text-align: center;
+}
+.led {
+  font-family: var(--f-display);
+  font-weight: 400;
+  color: var(--led);
+  text-shadow: 0 0 14px rgba(255, 194, 26, 0.55);
+  text-wrap: balance;
+}
+.board h1 { margin: 0; font-size: clamp(1.5rem, 5.6vw, 2.9rem); line-height: 1.02; }
+.board p {
+  margin: 10px 0 0; color: var(--chalk-dim); font-size: 1.05rem;
+  letter-spacing: 0.06em; text-transform: uppercase; font-weight: 600;
+}
+
+/* Menu des modes */
+.modes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 620px) { .modes { grid-template-columns: 1fr; } }
+.ticket {
+  background: var(--chalk); color: var(--ink); border-radius: 4px; padding: 16px 16px 14px;
+  display: flex; flex-direction: column; gap: 8px; box-shadow: 0 6px 0 rgba(0, 0, 0, 0.35);
+}
+.ticket .kicker { font-weight: 800; font-size: 0.85rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--red); }
+.ticket h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 1.45rem; line-height: 1.05; }
+.ticket p { margin: 0 0 10px; font-size: 1.05rem; font-weight: 500; }
+.ticket .btns {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-top: auto;
+  border-top: 2px dashed rgba(11, 29, 17, 0.25); padding-top: 12px;
+}
+.btn {
+  border: 0; border-radius: 3px; padding: 10px 14px; font-weight: 800; font-size: 1.05rem;
+  letter-spacing: 0.04em; text-transform: uppercase; background: var(--ink); color: var(--led);
+}
+.btn:hover { background: #17331f; }
+.btn.alt { background: transparent; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }
+.btn.alt:hover { background: rgba(11, 29, 17, 0.08); }
+.btn.go { background: var(--led); color: var(--ink); font-size: 1.2rem; padding: 12px 22px; }
+.btn.go:hover { background: #ffd04d; }
+.rules { color: var(--chalk-dim); font-size: 1rem; border-top: 1px solid var(--line); padding-top: 14px; text-align: center; margin: 0; }
+
+/* Barre du haut en jeu */
+.hud { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.hud .where { font-size: clamp(1.15rem, 4.4vw, 1.7rem); }
+.hud .count { font-weight: 700; color: var(--chalk-dim); font-variant-numeric: tabular-nums; letter-spacing: 0.05em; }
+.quit {
+  background: transparent; border: 1px solid var(--line); color: var(--chalk-dim);
+  border-radius: 3px; padding: 6px 10px; font-weight: 700; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 0.06em;
+}
+.quit:hover { color: var(--chalk); border-color: var(--chalk-dim); }
+.progress { height: 6px; background: rgba(0, 0, 0, 0.35); border-radius: 3px; overflow: hidden; }
+.progress i { display: block; height: 100%; width: 0; background: var(--led); transition: width 0.3s ease; }
+
+/* Commentateur */
+.mic {
+  display: flex; align-items: stretch; border-radius: 6px; overflow: hidden;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.35); border: 3px solid var(--led);
+}
+.mic b {
+  background: var(--red); color: #fff; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; font-size: 0.9rem; padding: 12px; display: flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.mic b svg { width: 18px; height: 18px; flex: none; }
+.mic span {
+  flex: 1; min-width: 0; background: var(--led); color: var(--ink);
+  font-style: italic; font-weight: 800; font-size: clamp(1.25rem, 4.6vw, 1.75rem); line-height: 1.15;
+  padding: 12px 16px; display: flex; align-items: center;
+}
+.mic.pop span { animation: pop 0.4s ease; }
+@keyframes pop { 0% { transform: scale(0.97); filter: brightness(1.25); } 100% { transform: none; filter: none; } }
+@media (max-width: 460px) { .mic b { flex-direction: column; justify-content: center; font-size: 0.75rem; padding: 10px 8px; } }
+
+.tag {
+  align-self: center; background: var(--night); color: var(--chalk); font-weight: 800; letter-spacing: 0.08em;
+  text-transform: uppercase; font-size: 0.95rem; padding: 5px 12px; border-radius: 2px; text-align: center;
+  border: 1px solid var(--line);
+}
+
+/* Duel */
+.arena { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: 10px; }
+.side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.vote {
+  flex: 1; min-height: 190px; background: var(--chalk); color: var(--ink); border: 0; border-radius: 6px;
+  padding: 18px 12px; display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 8px 0 rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.25s ease, background 0.2s ease;
+  position: relative;
+}
+.vote:hover:not(:disabled) { transform: translateY(-4px); box-shadow: 0 12px 0 rgba(0, 0, 0, 0.4); }
+.vote:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4); }
+.vote .nm {
+  font-family: var(--f-display); font-size: clamp(1.05rem, 4.2vw, 1.9rem); line-height: 1.08;
+  text-align: center; overflow-wrap: anywhere; text-wrap: balance;
+}
+.vote:disabled { cursor: default; }
+.vote.win { background: var(--led); transform: translateY(-4px) rotate(-1deg); }
+.vote.lose { opacity: 0.35; }
+.vote .stamp {
+  position: absolute; top: 10px; right: 10px; font-family: var(--f-display); font-size: 0.8rem;
+  background: var(--ink); color: var(--led); padding: 3px 7px; border-radius: 2px; transform: rotate(4deg);
+}
+.vote .rc {
+  position: absolute; top: 10px; right: 12px; width: 22px; height: 30px; background: var(--red);
+  border-radius: 2px; transform: rotate(10deg); box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
+}
+.vs {
+  align-self: center; width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--red); color: #fff; font-family: var(--f-display); font-size: 1.15rem;
+  box-shadow: 0 0 0 4px var(--night);
+}
+.look {
+  display: flex; align-items: center; justify-content: center; gap: 8px; text-align: center;
+  background: var(--night); color: var(--chalk); border: 2px solid var(--chalk-dim); border-radius: 999px;
+  padding: 8px 12px; font-weight: 700; font-size: 0.98rem; line-height: 1.15; text-decoration: none;
+}
+.look svg { width: 18px; height: 18px; flex: none; color: var(--led); }
+.look em { font-style: normal; color: var(--led); text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; }
+.look:hover { border-color: var(--led); }
+.look.none { visibility: hidden; }
+@media (max-width: 460px) {
+  .arena { gap: 6px; }
+  .vs { width: 40px; height: 40px; font-size: 0.85rem; }
+  .vote { min-height: 160px; padding: 14px 8px; }
+  .look { flex-direction: column; gap: 3px; font-size: 0.85rem; padding: 7px 8px; border-radius: 12px; }
+}
+.next { align-self: center; }
+
+/* Votes des potes */
+.stats { background: var(--night); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+.slabels { display: flex; justify-content: space-between; gap: 10px; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 1.05rem; }
+.slabels span { min-width: 0; overflow-wrap: anywhere; }
+.slabels span:last-child { text-align: right; }
+.sbar { display: flex; height: 14px; border-radius: 3px; overflow: hidden; background: rgba(255, 255, 255, 0.08); }
+.sbar i { display: block; height: 100%; width: 50%; transition: width 0.5s ease; }
+.sbar i:first-child { background: var(--led); }
+.sbar i:last-child { background: var(--red); }
+.stxt { text-align: center; font-weight: 700; color: var(--chalk-dim); }
+.top-n { color: var(--led); font-weight: 800; font-variant-numeric: tabular-nums; }
+
+/* Annonce de tour */
+.roundcard {
+  background-color: var(--night);
+  background-image: radial-gradient(rgba(255, 194, 26, 0.09) 1px, transparent 1.4px);
+  background-size: 6px 6px;
+  border: 3px solid var(--led); border-radius: 6px; padding: 26px 18px; text-align: center;
+  display: flex; flex-direction: column; gap: 10px; align-items: center;
+}
+.roundcard .eyebrow { font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; color: var(--red); background: var(--chalk); padding: 3px 10px; border-radius: 2px; font-size: 0.9rem; }
+.roundcard h2 { margin: 0; font-size: clamp(1.8rem, 8vw, 3.6rem); line-height: 1; }
+.roundcard p { margin: 0; color: var(--chalk-dim); font-weight: 700; font-size: 1.15rem; letter-spacing: 0.04em; }
+.roundcard.pulse h2 { animation: flash 0.9s ease 2; }
+@keyframes flash { 50% { text-shadow: 0 0 30px rgba(255, 194, 26, 0.95); } }
+.matchups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 560px) { .matchups { grid-template-columns: 1fr; } }
+.mu {
+  background: rgba(7, 20, 12, 0.75); border: 1px solid var(--line); border-radius: 4px; padding: 8px 10px;
+  display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 700;
+}
+.mu span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mu span:last-child { text-align: right; }
+.mu i { font-style: normal; font-family: var(--f-display); color: var(--red); font-size: 0.8rem; flex: none; }
+
+/* Fin de partie */
+.trophy {
+  background: var(--chalk); color: var(--ink); border-radius: 6px; padding: 22px 18px; text-align: center;
+  display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 0 rgba(0, 0, 0, 0.4);
+}
+.trophy .k { font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--red); font-size: 0.95rem; }
+.trophy .champ { font-family: var(--f-display); font-size: clamp(1.6rem, 7vw, 3rem); line-height: 1.02; overflow-wrap: anywhere; }
+.trophy .quote {
+  align-self: center; background: var(--led); color: var(--ink); font-style: italic; font-weight: 800;
+  font-size: clamp(1.15rem, 4.4vw, 1.5rem); padding: 6px 14px; border-radius: 4px; transform: rotate(-1deg);
+}
+.trophy .sub { font-weight: 600; font-size: 1.1rem; }
+.panel { background: rgba(7, 20, 12, 0.78); border: 1px solid var(--line); border-radius: 6px; padding: 14px 16px; }
+.panel h3 { margin: 0 0 12px; font-size: 1.1rem; }
+.recap { margin: 0; padding-left: 1.6em; display: flex; flex-direction: column; gap: 4px; font-size: 1.02rem; }
+.recap li { min-width: 0; overflow-wrap: anywhere; }
+.w { font-weight: 800; color: var(--chalk); }
+.l { color: var(--muted); text-decoration: line-through; text-decoration-color: rgba(224, 38, 46, 0.7); }
+
+/* Tableau complet */
+.bscroll { overflow-x: auto; padding-bottom: 6px; }
+.bracket { display: flex; gap: 10px; align-items: stretch; width: max-content; }
+.bcol { display: flex; flex-direction: column; width: 150px; flex: none; }
+.bh {
+  font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; font-size: 0.85rem; text-align: center;
+  color: var(--ink); background: var(--chalk); border-radius: 2px; padding: 3px 4px; margin-bottom: 8px;
+}
+.bbody { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 6px; }
+.bm { background: var(--night); border: 1px solid var(--line); border-radius: 4px; display: flex; flex-direction: column; }
+.bm span { padding: 4px 8px; font-size: 0.92rem; line-height: 1.15; overflow-wrap: anywhere; }
+.bm span + span { border-top: 1px solid var(--line); }
+.bm .bw { color: var(--ink); background: var(--led); font-weight: 800; }
+.bm .bl { color: var(--muted); }
+.bm.champ { border: 2px solid var(--led); }
+.bm.champ span { font-family: var(--f-display); font-size: 0.95rem; padding: 10px 8px; text-align: center; color: var(--led); background: transparent; }
+
+.share { display: flex; flex-direction: column; gap: 8px; }
+.share label { text-align: center; color: var(--chalk-dim); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; font-size: 0.9rem; }
+.share textarea {
+  width: 100%; min-height: 96px; resize: vertical; border-radius: 4px; border: 1px solid var(--line);
+  background: var(--night); color: var(--chalk); font: 500 1rem/1.35 var(--f-body); padding: 10px;
+}
+.endbtns { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.endbtns .btn { background: var(--led); color: var(--ink); }
+.endbtns .btn.alt { background: transparent; color: var(--chalk); box-shadow: inset 0 0 0 2px var(--chalk-dim); }
+.ok { text-align: center; color: var(--led); font-weight: 700; min-height: 1.3em; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+<script type="module">
+/* ---------- VOTES DES POTES (Firebase) ----------
+   Colle ici l'objet firebaseConfig de ton projet
+   (Paramètres du projet > Vos applications > Application Web). */
+const firebaseConfig = {
+  apiKey: "",
+  authDomain: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: ""
+};
+
+if (firebaseConfig.apiKey) {
+  try {
+    const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    const { getFirestore, doc, setDoc, getDoc, increment, collection, query, orderBy, limit, getDocs } =
+      await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const db = getFirestore(initializeApp(firebaseConfig));
+    const enc = s => encodeURIComponent(s);
+    window.cdbStore = {
+      async vote(a, b, winner) {
+        const [x, y] = [a, b].sort();
+        const ref = doc(db, "duels", enc(x) + "__" + enc(y));
+        await setDoc(ref, { a: x, b: y, [winner === x ? "ca" : "cb"]: increment(1) }, { merge: true });
+        const d = (await getDoc(ref)).data() || {};
+        return { [x]: d.ca || 0, [y]: d.cb || 0 };
+      },
+      async champion(mode, name) {
+        await setDoc(doc(db, "champs", mode, "names", enc(name)), { mode, name, titles: increment(1) }, { merge: true });
+        const snap = await getDocs(query(collection(db, "champs", mode, "names"), orderBy("titles", "desc"), limit(10)));
+        return snap.docs.map(d => ({ name: d.data().name, titles: d.data().titles }));
+      },
+    };
+  } catch (e) { window.cdbStore = null; }
+}
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header class="board" id="board">
+    <h1 class="led">Le Grand Championnat du Beauf</h1>
+    <p>Saison 2026 · Arbitrage vidéo : aucun</p>
+  </header>
+
+  <!-- ACCUEIL -->
+  <section id="menu" class="screen" style="gap:18px">
+    <div class="modes">
+      <article class="ticket">
+        <span class="kicker">Mode 1 · Tableau final</span>
+        <h2>La Coupe du Monde</h2>
+        <p>Premier tour en duels de sosies, sœurs et partenaires d'écran. Ensuite, le cœur parle jusqu'à la finale.</p>
+        <div class="btns">
+          <button class="btn" id="cup-full">16èmes · 31 matchs</button>
+          <button class="btn alt" id="cup-short">Express · 15 matchs</button>
+        </div>
+      </article>
+      <article class="ticket">
+        <span class="kicker">Mode 2 · 15 matchs</span>
+        <h2>La Reine de la Colline</h2>
+        <p>Une tenante du titre, des challengeuses tirées au sort. Celle qui gagne reste sur le terrain.</p>
+        <div class="btns"><button class="btn" id="hill">Coup d'envoi</button></div>
+      </article>
+      <article class="ticket">
+        <span class="kicker">Mode 3 · 15 matchs</span>
+        <h2>Le Mode Déconstruit</h2>
+        <p>Comme la colline : celui qui gagne reste sur le trône. Hommes, femmes, gode, lave-vaisselle, Thermomix… tout le monde se mélange.</p>
+        <div class="btns"><button class="btn" id="decon">Coup d'envoi</button></div>
+      </article>
+      <article class="ticket">
+        <span class="kicker">Mode 4 · 15 matchs</span>
+        <h2>Le Mode Geek</h2>
+        <p>Comme la colline : celui qui gagne reste sur le trône. Sangoku, Dark Vador, Harley Quinn, Thanos et les actrices qui les jouent.</p>
+        <div class="btns"><button class="btn" id="geek">Coup d'envoi</button></div>
+      </article>
+    </div>
+    <p class="rules">Tu cliques sur celui ou celle qui te fait le plus kiffer. Pas de mauvaise réponse. Enfin si.</p>
+  </section>
+
+  <!-- ANNONCE DE TOUR -->
+  <section id="round" class="screen" hidden>
+    <div class="hud">
+      <span class="count" id="rcount">Coupe du Monde</span>
+      <button class="quit" data-quit>Quitter</button>
+    </div>
+    <div class="roundcard" id="roundcard">
+      <span class="eyebrow" id="reyebrow">Coupe du Monde</span>
+      <h2 class="led" id="rtitle">16èmes de finale</h2>
+      <p id="rsub"></p>
+    </div>
+    <div class="mic"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>Au micro</b><span id="rline"></span></div>
+    <div class="matchups" id="matchups"></div>
+    <div class="next"><button class="btn go" id="rgo">Coup d'envoi ▸</button></div>
+  </section>
+
+  <!-- MATCH -->
+  <section id="game" class="screen" hidden>
+    <div class="hud">
+      <span class="where led" id="where">16èmes de finale</span>
+      <span class="count" id="count">Match 1 / 31</span>
+      <button class="quit" data-quit>Quitter</button>
+    </div>
+    <div class="progress"><i id="bar"></i></div>
+    <div class="mic" id="mic"><b><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></svg>Au micro</b><span id="line"></span></div>
+    <div class="tag" id="tag">Sœurs</div>
+    <div class="arena">
+      <div class="side">
+        <button class="vote" id="va"><span class="nm" id="na"></span></button>
+        <a class="look" id="la" target="_blank" rel="noopener"></a>
+      </div>
+      <div class="vs">VS</div>
+      <div class="side">
+        <button class="vote" id="vb"><span class="nm" id="nb"></span></button>
+        <a class="look" id="lb" target="_blank" rel="noopener"></a>
+      </div>
+    </div>
+    <div class="stats" id="stats" hidden>
+      <div class="slabels"><span id="spa"></span><span id="spb"></span></div>
+      <div class="sbar"><i id="sba"></i><i id="sbb"></i></div>
+      <div class="stxt" id="stxt"></div>
+    </div>
+    <div class="next" id="nextwrap" hidden><button class="btn go" id="next">Match suivant ▸</button></div>
+  </section>
+
+  <!-- FIN -->
+  <section id="end" class="screen" hidden>
+    <div class="trophy">
+      <span class="k" id="endk">Championne du monde</span>
+      <span class="champ" id="champ"></span>
+      <span class="quote" id="endquote"></span>
+      <span class="sub" id="endsub"></span>
+    </div>
+    <div class="panel" id="bracketpanel" hidden>
+      <h3 class="led">Le tableau complet</h3>
+      <div class="bscroll"><div class="bracket" id="bracket"></div></div>
+    </div>
+    <div class="panel" id="toppanel" hidden>
+      <h3 class="led" id="toph">Le classement des potes</h3>
+      <ol class="recap" id="top"></ol>
+    </div>
+    <div class="panel" id="recappanel" hidden>
+      <h3 class="led" id="recaph">Les 15 matchs</h3>
+      <ol class="recap" id="recap"></ol>
+    </div>
+    <div class="share">
+      <label for="sharetxt">À balancer dans le groupe</label>
+      <textarea id="sharetxt" readonly></textarea>
+      <div class="endbtns">
+        <button class="btn" id="copy">Copier pour les potes</button>
+        <button class="btn" id="again">Rejouer</button>
+        <button class="btn alt" id="tomenu">Menu</button>
+      </div>
+      <div class="ok" id="copyok" aria-live="polite"></div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ---------- VOTES DES POTES ----------
+   Le branchement à la base se fait dans le petit script "Firebase" en haut de la page. */
+const store = () => window.cdbStore || null;
+
+async function recordVote(mode, a, b, winner) {
+  const st = store(); if (!st) return null;
+  try { return await st.vote(a, b, winner); } catch (e) { return null; }
+}
+
+async function recordChampion(mode, name) {
+  const st = store(); if (!st) return null;
+  try { return await st.champion(mode, name); } catch (e) { return null; }
+}
+
+/* ---------- BIBLIOTHÈQUE ---------- */
+// Mode 1 : duels de premier tour. Chaque duel a un lien réel entre les deux.
+const WOMEN_DUELS = [
+  ["Natalie Portman","Keira Knightley","Sosies · Knightley a joué sa doublure dans Star Wars I"],
+  ["Isla Fisher","Amy Adams","Sosies notoires"],
+  ["Jessica Chastain","Bryce Dallas Howard","Sosies notoires"],
+  ["Gal Gadot","Odeya Rush","Sosies notoires"],
+  ["Selena Gomez","Lucy Hale","Sosies notoires"],
+  ["Reem Kherici","Anissa Kate","Sosies"],
+  ["Scarlett Johansson","Charlize Theron","Le choc des blondes"],
+  ["Ana de Armas","Margot Robbie","Le choc des stars"],
+  ["Penélope Cruz","Salma Hayek","Duo de Bandidas"],
+  ["Alexandra Lamy","Audrey Lamy","Sœurs"],
+  ["Dakota Fanning","Elle Fanning","Sœurs"],
+  ["Rooney Mara","Kate Mara","Sœurs"],
+  ["Zooey Deschanel","Emily Deschanel","Sœurs"],
+  ["Emmanuelle Seigner","Mathilde Seigner","Sœurs"],
+  ["Charlotte Gainsbourg","Lou Doillon","Demi-sœurs"],
+  ["Hilary Duff","Haylie Duff","Sœurs"],
+  ["Mary-Kate Olsen","Ashley Olsen","Jumelles"],
+  ["Goldie Hawn","Kate Hudson","Mère contre fille"],
+  ["Melanie Griffith","Dakota Johnson","Mère contre fille"],
+  ["Andie MacDowell","Margaret Qualley","Mère contre fille"],
+  ["Catherine Deneuve","Chiara Mastroianni","Mère contre fille"],
+  ["Léa Seydoux","Adèle Exarchopoulos","La Vie d'Adèle"],
+  ["Rachel McAdams","Amanda Seyfried","Mean Girls"],
+  ["Jennifer Aniston","Courteney Cox","Friends"],
+  ["Sarah Jessica Parker","Kim Cattrall","Sex and the City"],
+  ["Blake Lively","Leighton Meester","Gossip Girl"],
+  ["Cameron Diaz","Drew Barrymore","Charlie et ses drôles de dames"],
+  ["Eva Longoria","Teri Hatcher","Desperate Housewives"],
+  ["Sydney Sweeney","Alexandra Daddario","The White Lotus"],
+  ["Zendaya","Florence Pugh","Dune : deuxième partie"],
+  ["Anne Hathaway","Emily Blunt","Le Diable s'habille en Prada"],
+  ["Emma Stone","Rachel Weisz","La Favorite"],
+  ["Mila Kunis","Kristen Bell","Bad Moms"],
+  ["Megan Fox","Amanda Seyfried","Jennifer's Body"],
+  ["Charlize Theron","Kristen Stewart","Blanche-Neige et le Chasseur"],
+  ["Margot Robbie","Cara Delevingne","Suicide Squad"],
+  ["Emilia Clarke","Sophie Turner","Game of Thrones"],
+  ["Scarlett Johansson","Elizabeth Olsen","Avengers"],
+  ["Scarlett Johansson","Florence Pugh","Black Widow"],
+  ["Zoe Saldaña","Karen Gillan","Les Gardiens de la Galaxie"],
+  ["Lily Collins","Camille Razat","Emily in Paris"],
+  ["Natalie Portman","Mila Kunis","Black Swan"],
+  ["Leïla Bekhti","Géraldine Nakache","Tout ce qui brille"],
+  ["Nicole Kidman","Naomi Watts","Copines depuis l'adolescence"],
+  ["Kirsten Dunst","Emma Stone","Les copines de Spider-Man"],
+  ["Michelle Pfeiffer","Zoë Kravitz","Les Catwoman"],
+  ["Halle Berry","Anne Hathaway","Les Catwoman"],
+  ["Angelina Jolie","Alicia Vikander","Les Lara Croft"],
+  ["Angelina Jolie","Jennifer Aniston","L'affaire Brad Pitt"],
+  ["Monica Bellucci","Eva Green","James Bond girls"],
+  ["Sophie Marceau","Léa Seydoux","James Bond girls"],
+  ["Halle Berry","Ana de Armas","James Bond girls"],
+  ["Sophie Marceau","Monica Bellucci","James Bond girls"],
+  ["Marion Cotillard","Juliette Binoche","Françaises oscarisées"],
+  ["Laetitia Casta","Catherine Deneuve","Les Marianne"],
+  ["Emma Watson","Emma Roberts","Même prénom"],
+  ["Jessica Alba","Jessica Biel","Même prénom"],
+  ["Jennifer Lawrence","Jennifer Lopez","Même prénom"],
+  ["Kate Winslet","Kate Beckinsale","Même prénom"],
+  ["Lily Collins","Lily James","Même prénom"],
+  ["Audrey Tautou","Audrey Fleurot","Même prénom"],
+  ["Virginie Efira","Virginie Ledoyen","Même prénom"],
+  ["Camille Cottin","Camille Lellouche","Même prénom"],
+];
+const WOMEN_EXTRA = ["Mia Khalifa","Gracie Abrams"];
+const WOMEN_POOL = [...new Set([...WOMEN_DUELS.flatMap(d => [d[0], d[1]]), ...WOMEN_EXTRA])];
+
+const DECON_DUELS = [
+  ["Javier Bardem","Jeffrey Dean Morgan","Sosies notoires"],
+  ["Tom Hardy","Logan Marshall-Green","Sosies notoires"],
+  ["Ryan Gosling","Ryan Reynolds","Les Ryan"],
+  ["Chris Pratt","Chris Evans","Les Chris"],
+  ["Chris Hemsworth","Chris Pine","Les Chris"],
+  ["Eric Judor","Ramzy Bédia","Eric et Ramzy"],
+  ["Omar Sy","Fred Testot","Omar et Fred"],
+  ["Omar Sy","François Cluzet","Intouchables"],
+  ["Jean Dujardin","Gilles Lellouche","Les Infidèles"],
+  ["Brad Pitt","George Clooney","Ocean's Eleven"],
+  ["Brad Pitt","Leonardo DiCaprio","Once Upon a Time in Hollywood"],
+  ["Tibo InShape","Dwayne Johnson","Concours de biscotos"],
+  ["Timothée Chalamet","Zendaya","Homme contre femme · Dune"],
+  ["Brad Pitt","Angelina Jolie","Homme contre femme · Mr. & Mrs. Smith"],
+  ["Ryan Gosling","Margot Robbie","Homme contre femme · Barbie"],
+  ["Leonardo DiCaprio","Kate Winslet","Homme contre femme · Titanic"],
+  ["Omar Sy","Audrey Fleurot","Homme contre femme · Intouchables"],
+  ["Un homme","Un gode","Homme contre objet"],
+  ["Un homme qui fait jamais la vaisselle","Un lave-vaisselle","Homme contre objet"],
+  ["Un homme","Un Thermomix","Homme contre objet"],
+  ["Ton mec","Un plaid + Netflix","Homme contre objet"],
+  ["Un homme","Un chat","Homme contre objet"],
+  ["Un homme","Une bouillotte en janvier","Homme contre objet"],
+  ["Un homme qui dit « je vais t'expliquer »","Une notice IKEA","Homme contre objet"],
+  ["Ton ex","Un pot de Nutella","Homme contre objet"],
+  ["Tibo InShape","Une barre protéinée","Homme contre objet"],
+  ["Brad Pitt","Une raclette","Homme contre objet"],
+  ["Ryan Gosling","Un plaid + Netflix","Homme contre objet"],
+];
+
+const GEEK_DUELS = [
+  ["Sangoku","Superman","Le choc des costauds"],
+  ["Batman","Ian Scott","Proposé par la direction"],
+  ["Hugh Jackman","Wolverine","L'acteur contre son perso"],
+  ["Henry Cavill","Geralt de Riv","L'acteur contre son perso"],
+  ["Margot Robbie","Harley Quinn","L'actrice contre son perso"],
+  ["Gal Gadot","Wonder Woman","L'actrice contre son perso"],
+  ["Angelina Jolie","Lara Croft","L'actrice contre son perso"],
+  ["Scarlett Johansson","Motoko Kusanagi","L'actrice contre son perso"],
+  ["Jennifer Lawrence","Mystique","L'actrice contre son perso"],
+  ["Anne Hathaway","Catwoman","L'actrice contre son perso"],
+  ["Zoe Saldaña","Gamora","L'actrice contre son perso"],
+  ["Sydney Sweeney","Jessica Rabbit","Le réel contre le dessin"],
+  ["Ana de Armas","Bulma (Dragon Ball Z)","Le réel contre le dessin"],
+  ["Monica Bellucci","Nico Robin","Le réel contre le dessin"],
+  ["Megan Fox","Tifa Lockhart","Le réel contre le dessin"],
+  ["Spike Spiegel","Han Solo","Les cow-boys de l'espace"],
+  ["Dark Vador","Thanos","Les grands méchants"],
+  ["Voldemort","Dark Vador","Sans nez contre sans visage"],
+  ["Yoda","Krilin","Les petits formats"],
+  ["Luke Skywalker","Dark Vador","Je suis ton père"],
+  ["Dark Maul","Deadpool","Les visages qui piquent"],
+  ["Daredevil","Batman","Les justiciers de la nuit"],
+  ["Deadpool","Harley Quinn","Les grands malades"],
+  ["Iron Man","Batman","Les milliardaires en armure"],
+  ["Gandalf","Dumbledore","Les barbes blanches"],
+  ["Jack Sparrow","Han Solo","Les canailles"],
+  ["Princesse Leia","Padmé Amidala","Mère contre fille"],
+  ["Black Widow","Wonder Woman","Marvel contre DC"],
+  ["Harley Quinn","Catwoman","Les méchantes préférées"],
+  ["Lara Croft","Tifa Lockhart","Les héroïnes de manette"],
+  ["Fujiko Mine","Jessica Rabbit","Les fatales"],
+  ["Thanos","Gamora","Père contre fille adoptive"],
+  ["Vegeta","Sangoku","Les Saiyans"],
+  ["Krilin","Dark Maul","Les crânes rasés"],
+  ["Aragorn","Geralt de Riv","Les ténébreux"],
+  ["Shrek","Fiona","Couple d'ogres"],
+];
+
+/* ---------- COMMENTAIRES ---------- */
+const BEFORE = [
+  "En vrai, les deux !!", "LFI ou RN ?", "McDo ou BK ?", "Chipo ou guezmer ?", "Tant que y'a pelouse !",
+  "Choisis vite, ta mère arrive.", "Y'a pas de mauvaise réponse. Enfin si, y'en a une.",
+  "Ton historique de navigation a déjà voté.", "Si t'hésites, t'as déjà perdu.",
+  "Change d'appli, y'a ta meuf qui arrive !",
+];
+const BEFORE_WOMEN = ["Qui est la plus bonne !?", "On dirait trop la mère de ton pote !"];
+const BEFORE_GEEK = ["Ta collection de figurines te regarde.", "Personne te juge, t'es dans ta chambre."];
+const BEFORE_DECON = ["Déconstruit, oui. Aveugle, non.", "Ta déconstruction est en cours de chargement…"];
+const HESITATE = ["T'hésites ou tu te touches ?", "T'es long ! On dirait ma bite !", "T'es long ! On te le dit pas souvent ça."];
+const AFTER = [
+  "ET C'EST LE DRAAAME !", "On n'avait pas vu ça depuis 98 !", "Même ton oncle bourré n'aurait pas fait ce choix.",
+  "Ton psy va adorer cette session.", "Ton père peut être fier, champion !", "Vamos !!",
+  "Haha, t'as vraiment des goûts de merde !", "T'es qui pour juger ? T'as vu ta gueule !",
+  "Arrête de voter, y'a ta meuf qui t'attend !", "Tu fais partie des 0,5 % de la population mondiale.",
+];
+const AFTER_WOMEN = ["Bien vu, mais elle, jamais elle clique sur toi !", "Tu vaux mieux qu'elle."];
+const CLINGY = "Tu t'accroches, c'est flippant !";
+const ROUND_LINES = ["Ça sent la bagarre.", "Les choses sérieuses commencent.", "Accroche-toi à ton slip.", "Préviens ta meuf, t'en as pour un moment."];
+const FINAL_LINE = "Le moment que tout le pays attendait. Respire.";
+const CHAMP_LINES = ["Tu rêverais de la ramener à la maison.", "Présente-la à ta mère, elle va adorer.", "Avoue, tu vas l'encadrer au-dessus de ton lit."];
+const LOOK = ["Connais pas ? Ah la honte !", "Tu sors d'une grotte ?", "Va découvrir cette merveille"];
+const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>';
+
+/* ---------- RÉGLAGES ---------- */
+const DECON_POOL = [...new Set(DECON_DUELS.flatMap(d => [d[0], d[1]]))];
+const GEEK_POOL = [...new Set(GEEK_DUELS.flatMap(d => [d[0], d[1]]))];
+const pairKey = (a, b) => [a, b].sort().join("|");
+const PAIR_TAGS = {};
+[...WOMEN_DUELS, ...DECON_DUELS, ...GEEK_DUELS].forEach(d => { PAIR_TAGS[pairKey(d[0], d[1])] = d[2]; });
+const HILL_INFO = {
+  hill: { name: "La Reine de la Colline", pool: WOMEN_POOL, holder: "Tenante du titre", first: "Tenante du titre contre challengeuse", k: "Reine de la Colline", emoji: "👑", end: "Elle a tout bouffé. Respect." },
+  decon: { name: "Le Mode Déconstruit", pool: DECON_POOL, holder: "Sur le trône", first: "Le trône est à prendre", k: "Sur le trône du Mode Déconstruit", emoji: "🧠", end: "Déconstruit, mais pas trop. Parfait." },
+  geek: { name: "Le Mode Geek", pool: GEEK_POOL, holder: "Sur le trône", first: "Le trône est à prendre", k: "Sur le trône du Mode Geek", emoji: "🎮", end: "Ta collection de figurines est fière de toi." },
+};
+const ROUND_NAMES = { 16: "16èmes de finale", 8: "8èmes de finale", 4: "Quarts de finale", 2: "Demi-finales", 1: "Finale" };
+const ROUND_SHORT = { 16: "16èmes", 8: "8èmes", 4: "Quarts", 2: "Demies", 1: "Finale" };
+
+/* ---------- OUTILS ---------- */
+const $ = id => document.getElementById(id);
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const pick = a => a[Math.floor(Math.random() * a.length)];
+let lastLine = "";
+function line(pool) { let l, n = 0; do { l = pick(pool); n++; } while (l === lastLine && n < 6); lastLine = l; return l; }
+const noLink = n => /^(Un|Une|Ton) /.test(n);
+const lookUrl = n => "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(n);
+const plural = (n, w) => n + " " + w + (n > 1 ? "s" : "");
+
+function gamesPlayed(inc) {
+  try {
+    let n = parseInt(localStorage.getItem("cdb-games") || "0", 10) || 0;
+    if (inc) { n++; localStorage.setItem("cdb-games", String(n)); }
+    return n;
+  } catch (e) { return 0; }
+}
+
+function pickDuels(n) {
+  for (let t = 0; t < 400; t++) {
+    const used = new Set(), out = [];
+    for (const d of shuffle(WOMEN_DUELS)) {
+      if (used.has(d[0]) || used.has(d[1])) continue;
+      used.add(d[0]); used.add(d[1]);
+      out.push({ a: d[0], b: d[1], tag: d[2] });
+      if (out.length === n) return out;
+    }
+  }
+  return null;
+}
+
+/* ---------- ÉTAT ---------- */
+let S = null, hesTimer = null, nextTimer = null, locked = false;
+
+function show(id) {
+  ["menu", "round", "game", "end"].forEach(s => { $(s).hidden = s !== id; });
+  $("board").hidden = id !== "menu";
+  window.scrollTo(0, 0);
+}
+
+function start(mode, size) {
+  clearTimeout(hesTimer); clearTimeout(nextTimer);
+  S = { mode, size, done: 0, history: [], clingy: gamesPlayed(false) >= 3 };
+  if (mode === "cup") {
+    S.round = pickDuels(size); S.idx = 0; S.winners = []; S.cur = []; S.rounds = []; S.total = size * 2 - 1;
+    showRound();
+  } else {
+    const pool = shuffle(HILL_INFO[mode].pool);
+    S.queen = pool[0]; S.challengers = pool.slice(1, 16); S.idx = 0; S.total = S.challengers.length;
+    S.streak = 0; S.best = { name: S.queen, streak: 0 };
+    show("game"); render();
+  }
+}
+
+function showRound() {
+  const n = S.round.length;
+  const card = $("roundcard");
+  $("rcount").textContent = (S.size === 8 ? "Coupe du Monde · Express" : "Coupe du Monde") + " · " + plural(S.done, "match") + " joué" + (S.done > 1 ? "s" : "");
+  $("reyebrow").textContent = S.done === 0 ? "Coup d'envoi" : "Tour suivant";
+  $("rtitle").textContent = n === 1 ? "C'est la finale !" : ROUND_NAMES[n];
+  $("rsub").textContent = n === 1 ? "Plus que 2 en lice. Une seule repartira avec la coupe." : (n * 2) + " qualifiées · " + plural(n, "match") + " à jouer";
+  $("rline").textContent = n === 1 ? FINAL_LINE : line(ROUND_LINES);
+  const mu = $("matchups"); mu.innerHTML = "";
+  S.round.forEach(m => {
+    const d = document.createElement("div"); d.className = "mu";
+    const a = document.createElement("span"); a.textContent = m.a;
+    const v = document.createElement("i"); v.textContent = "VS";
+    const b = document.createElement("span"); b.textContent = m.b;
+    d.append(a, v, b); mu.appendChild(d);
+  });
+  show("round");
+  card.classList.remove("pulse"); void card.offsetWidth; card.classList.add("pulse");
+  $("rgo").focus({ preventScroll: true });
+}
+
+function current() {
+  if (S.mode === "cup") return S.round[S.idx];
+  const info = HILL_INFO[S.mode], b = S.challengers[S.idx];
+  const curated = PAIR_TAGS[pairKey(S.queen, b)];
+  const streak = S.streak ? info.holder + " · " + plural(S.streak, "victoire") + " d'affilée" : info.first;
+  return { a: S.queen, b, tag: curated ? curated + " · " + streak : streak };
+}
+
+function where() {
+  if (S.mode === "cup") return ROUND_NAMES[S.round.length];
+  return HILL_INFO[S.mode].name;
+}
+
+function setLook(el, name) {
+  if (noLink(name)) { el.className = "look none"; el.removeAttribute("href"); el.textContent = "·"; return; }
+  el.className = "look"; el.href = lookUrl(name);
+  el.innerHTML = MIC_SVG + "<span></span><em>Clique ici</em>";
+  el.querySelector("span").textContent = pick(LOOK);
+  el.setAttribute("aria-label", "Voir des photos de " + name + " sur Google Images");
+}
+
+function render() {
+  locked = false;
+  clearTimeout(hesTimer); clearTimeout(nextTimer);
+  const m = current();
+  $("where").textContent = where();
+  $("count").textContent = "Match " + (S.done + 1) + " / " + S.total;
+  $("bar").style.width = (S.done / S.total * 100) + "%";
+  $("tag").textContent = m.tag || "Le cœur a parlé";
+  ["a", "b"].forEach(k => {
+    const btn = $("v" + k);
+    btn.className = "vote"; btn.disabled = false;
+    btn.querySelectorAll(".stamp,.rc").forEach(x => x.remove());
+    $("n" + k).textContent = m[k];
+    btn.setAttribute("aria-label", "Voter pour " + m[k]);
+    setLook($("l" + k), m[k]);
+  });
+  const women = S.mode === "cup" || S.mode === "hill";
+  say(line(BEFORE.concat(women ? BEFORE_WOMEN : S.mode === "geek" ? BEFORE_GEEK : BEFORE_DECON)));
+  $("nextwrap").hidden = true;
+  $("stats").hidden = true;
+  S.view = {};
+  hesTimer = setTimeout(() => { if (!locked) say(line(HESITATE)); }, 6000);
+}
+
+function say(t) {
+  const mic = $("mic");
+  $("line").textContent = t;
+  mic.classList.remove("pop"); void mic.offsetWidth; mic.classList.add("pop");
+}
+
+function vote(side) {
+  if (locked || !S) return;
+  locked = true;
+  clearTimeout(hesTimer);
+  const m = current();
+  const w = side === "a" ? m.a : m.b, l = side === "a" ? m.b : m.a;
+  const wb = $("v" + side), lb = $("v" + (side === "a" ? "b" : "a"));
+  wb.classList.add("win"); lb.classList.add("lose");
+  wb.disabled = true; lb.disabled = true;
+  const st = document.createElement("span"); st.className = "stamp"; st.textContent = "Victoire"; wb.appendChild(st);
+  const rc = document.createElement("span"); rc.className = "rc"; rc.setAttribute("aria-hidden", "true"); lb.appendChild(rc);
+
+  S.history.push({ w, l, r: where() });
+  S.done++;
+  $("bar").style.width = (S.done / S.total * 100) + "%";
+
+  const women = S.mode === "cup" || S.mode === "hill";
+  let t = line(AFTER.concat(women ? AFTER_WOMEN : []));
+  if (S.clingy && S.done === 3) t = CLINGY;
+  say(t);
+
+  advance(m, w);
+  $("next").textContent = S.finished ? "Voir le résultat ▸" : S.pendingRound ? "Tour suivant ▸" : "Match suivant ▸";
+  $("nextwrap").hidden = false;
+  $("next").focus({ preventScroll: true });
+  nextTimer = setTimeout(goNext, store() ? 3400 : 2400);
+
+  const view = S.view;
+  recordVote(S.mode, m.a, m.b, w).then(counts => {
+    if (!counts || !S || S.view !== view || $("game").hidden) return;
+    showStats(m, w, counts);
+  });
+}
+
+function showStats(m, w, counts) {
+  const ca = counts[m.a] || 0, cb = counts[m.b] || 0, tot = ca + cb;
+  if (!tot) return;
+  const pa = Math.round(ca / tot * 100), pb = 100 - pa;
+  $("spa").textContent = pa + " % " + m.a;
+  $("spb").textContent = m.b + " " + pb + " %";
+  $("sba").style.width = pa + "%";
+  $("sbb").style.width = pb + "%";
+  const mine = w === m.a ? pa : pb;
+  let t;
+  if (tot === 1) t = "T'es le premier à voter sur ce duel. Respect au pionnier.";
+  else if (mine === 100) t = "Tout le monde pense comme toi. T'es d'une banalité folle.";
+  else if (mine >= 50) t = mine + " % des potes sont d'accord avec toi (" + tot + " votes). T'es normal, bravo.";
+  else t = "Seulement " + mine + " % sont d'accord avec toi (" + tot + " votes). Remets-toi en question.";
+  $("stxt").textContent = t;
+  $("stats").hidden = false;
+}
+
+function advance(m, w) {
+  if (S.mode === "cup") {
+    S.cur.push({ a: m.a, b: m.b, w });
+    S.winners.push(w); S.idx++;
+    if (S.idx >= S.round.length) {
+      S.rounds.push(S.cur); S.cur = [];
+      if (S.winners.length === 1) { S.finished = true; S.champion = w; return; }
+      const next = [];
+      for (let i = 0; i < S.winners.length; i += 2) next.push({ a: S.winners[i], b: S.winners[i + 1], tag: "" });
+      S.pendingRound = next;
+    }
+  } else {
+    if (w === S.queen) S.streak++; else { S.queen = w; S.streak = 1; }
+    if (S.streak > S.best.streak) S.best = { name: S.queen, streak: S.streak };
+    S.idx++;
+    if (S.idx >= S.challengers.length) S.finished = true;
+  }
+}
+
+function goNext() {
+  clearTimeout(nextTimer);
+  if (!S || $("game").hidden) return;
+  if (S.finished) return finish();
+  if (S.pendingRound) { S.round = S.pendingRound; S.pendingRound = null; S.idx = 0; S.winners = []; return showRound(); }
+  render();
+}
+
+function finish() {
+  gamesPlayed(true);
+  let k, champ, quote, sub, share;
+  $("bracketpanel").hidden = true; $("recappanel").hidden = true;
+  if (S.mode === "cup") {
+    const final = S.history[S.history.length - 1];
+    k = "Championne du monde"; champ = S.champion; quote = pick(CHAMP_LINES);
+    sub = "Victoire en finale contre " + final.l;
+    renderBracket();
+    $("bracketpanel").hidden = false;
+    const path = S.rounds.map(r => r.find(x => x.w === S.champion)).filter(Boolean)
+      .map((x, i) => "• " + ROUND_SHORT[S.rounds[i].length] + " : bat " + (x.a === S.champion ? x.b : x.a)).join("\n");
+    share = "🏆 Le Grand Championnat du Beauf (" + (S.size === 16 ? "Coupe du Monde" : "Express") + ")\nMa championne du monde : " + S.champion + "\n" + path + "\nViens me contredire si t'oses.";
+  } else {
+    const info = HILL_INFO[S.mode];
+    k = info.k; champ = S.queen; quote = info.end;
+    sub = "Encore debout après " + plural(S.streak, "match") + " d'affilée";
+    if (S.best.name !== S.queen) sub += " · Record de la partie : " + S.best.name + " (" + S.best.streak + ")";
+    const ol = $("recap"); ol.innerHTML = "";
+    S.history.forEach(h => {
+      const li = document.createElement("li");
+      const w = document.createElement("span"); w.className = "w"; w.textContent = h.w;
+      const l = document.createElement("span"); l.className = "l"; l.textContent = h.l;
+      li.append(w, document.createTextNode(" bat "), l); ol.appendChild(li);
+    });
+    $("recappanel").hidden = false;
+    share = info.emoji + " " + info.name + " · Championnat du Beauf\nÀ la fin des 15 matchs : " + S.queen + " (" + plural(S.streak, "victoire") + " d'affilée).\nRecord de la partie : " + S.best.name + " avec " + S.best.streak + ".\nOn en parle ?";
+  }
+  $("endk").textContent = k; $("champ").textContent = champ; $("endquote").textContent = quote; $("endsub").textContent = sub;
+  $("sharetxt").value = share; $("copyok").textContent = "";
+  $("toppanel").hidden = true;
+  show("end");
+
+  const token = S;
+  $("toph").textContent = S.mode === "cup" ? "Les championnes des potes" : "Le classement des potes · " + HILL_INFO[S.mode].name;
+  recordChampion(S.mode, champ).then(rows => {
+    if (!rows || !rows.length || S !== token || $("end").hidden) return;
+    const ol = $("top"); ol.innerHTML = "";
+    rows.forEach(r => {
+      const li = document.createElement("li");
+      const n = document.createElement("span"); n.className = "w"; n.textContent = r.name;
+      const c = document.createElement("span"); c.className = "top-n";
+      const t = Number(r.titles) || 0;
+      c.textContent = " · " + t + " titre" + (t > 1 ? "s" : "");
+      li.append(n, c); ol.appendChild(li);
+    });
+    $("toppanel").hidden = false;
+  });
+}
+
+function renderBracket() {
+  const el = $("bracket"); el.innerHTML = "";
+  S.rounds.forEach(r => {
+    const col = document.createElement("div"); col.className = "bcol";
+    const h = document.createElement("div"); h.className = "bh"; h.textContent = ROUND_SHORT[r.length];
+    const body = document.createElement("div"); body.className = "bbody";
+    r.forEach(m => {
+      const box = document.createElement("div"); box.className = "bm";
+      [m.a, m.b].forEach(n => { const s = document.createElement("span"); s.className = n === m.w ? "bw" : "bl"; s.textContent = n; box.appendChild(s); });
+      body.appendChild(box);
+    });
+    col.append(h, body); el.appendChild(col);
+  });
+  const col = document.createElement("div"); col.className = "bcol";
+  const h = document.createElement("div"); h.className = "bh"; h.textContent = "Championne";
+  const body = document.createElement("div"); body.className = "bbody";
+  const box = document.createElement("div"); box.className = "bm champ";
+  const s = document.createElement("span"); s.textContent = "🏆 " + S.champion; box.appendChild(s);
+  body.appendChild(box); col.append(h, body); el.appendChild(col);
+}
+
+/* ---------- BRANCHEMENTS ---------- */
+$("cup-full").onclick = () => start("cup", 16);
+$("cup-short").onclick = () => start("cup", 8);
+$("hill").onclick = () => start("hill");
+$("decon").onclick = () => start("decon");
+$("geek").onclick = () => start("geek");
+$("va").onclick = () => vote("a");
+$("vb").onclick = () => vote("b");
+$("next").onclick = goNext;
+$("rgo").onclick = () => { show("game"); render(); };
+document.querySelectorAll("[data-quit]").forEach(b => { b.onclick = () => { clearTimeout(hesTimer); clearTimeout(nextTimer); S = null; show("menu"); }; });
+$("tomenu").onclick = () => { S = null; show("menu"); };
+$("again").onclick = () => start(S.mode, S.size);
+$("copy").onclick = () => {
+  const ta = $("sharetxt");
+  const done = () => { $("copyok").textContent = "Copié. Balance ça dans le groupe."; };
+  const fallback = () => { ta.focus(); ta.select(); $("copyok").textContent = "Texte sélectionné, fais Copier."; };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(ta.value).then(done, fallback);
+    else fallback();
+  } catch (e) { fallback(); }
+};
+document.addEventListener("keydown", e => {
+  if ($("game").hidden) return;
+  if (e.key === "ArrowLeft") vote("a");
+  else if (e.key === "ArrowRight") vote("b");
+});
+</script>
+
+</body>
+</html>
