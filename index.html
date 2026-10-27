@@ -232,6 +232,29 @@ button { font: inherit; cursor: pointer; }
 .ranklist .nm { font-weight: 800; overflow-wrap: anywhere; }
 .ranklist .sc { color: var(--led); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rankmsg { margin: 0; color: var(--chalk-dim); font-weight: 600; text-align: center; }
+.chat { display: flex; flex-direction: column; gap: 10px; }
+.chat h3 { margin: 0; }
+.chatsub { margin: 0; color: var(--chalk-dim); font-weight: 600; }
+.posts {
+  list-style: none; margin: 0; padding: 4px 10px; display: flex; flex-direction: column; gap: 8px;
+  max-height: 360px; overflow-y: auto; background: rgba(0, 0, 0, 0.25); border-radius: 4px;
+}
+.posts:empty { display: none; }
+.posts li { padding: 6px 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.posts li:last-child { border-bottom: 0; }
+.posts .ph { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.posts .pp { color: var(--led); font-weight: 800; }
+.posts .pt { color: var(--muted); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+.posts .px { white-space: pre-wrap; overflow-wrap: anywhere; font-weight: 500; font-size: 1.05rem; }
+.chatform { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.chatform textarea {
+  flex: 1 1 220px; min-width: 0; resize: vertical; font: 500 1.05rem/1.3 var(--f-body); padding: 10px 12px;
+  border: 2px solid var(--chalk-dim); border-radius: 3px; background: var(--night); color: var(--chalk);
+}
+.chatform textarea:focus { border-color: var(--led); outline: none; }
+.chatmsg { color: var(--chalk-dim); min-height: 1.2em; }
+.chatmsg.err { color: var(--red); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .top-n { color: var(--led); font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* Annonce de tour */
@@ -336,7 +359,6 @@ if (firebaseConfig.apiKey) {
         await setDoc(ref, { a: x, b: y, [left ? "ca" : "cb"]: increment(1), [left ? "va" : "vb"]: arrayUnion(pseudo) }, { merge: true });
         setDoc(doc(db, "wins", enc(winner)), { name: winner, wins: increment(1) }, { merge: true }).catch(() => {});
         setDoc(doc(db, "players", enc(pseudo)), { p: pseudo, votes: increment(1) }, { merge: true }).catch(() => {});
-        addDoc(collection(db, "feed"), { p: pseudo, w: winner, l: winner === a ? b : a, m: mode, t: serverTimestamp() }).catch(() => {});
         const d = (await getDoc(ref)).data() || {};
         return { counts: { [x]: d.ca || 0, [y]: d.cb || 0 }, voters: { [x]: d.va || [], [y]: d.vb || [] } };
       },
@@ -351,9 +373,13 @@ if (firebaseConfig.apiKey) {
         const snap = await getDocs(query(collection(db, coll), orderBy(field, "desc"), limit(30)));
         return snap.docs.map(d => { const x = d.data(); return { name: kind === "players" ? x.p : x.name, score: x[field] || 0 }; });
       },
-      watchFeed(cb) {
-        return onSnapshot(query(collection(db, "feed"), orderBy("t", "desc"), limit(25)),
-          snap => cb(snap.docs.map(d => d.data())), () => {});
+      watchPosts(cb, onErr) {
+        return onSnapshot(query(collection(db, "posts"), orderBy("t", "desc"), limit(80)),
+          snap => cb(snap.docs.map(d => d.data({ serverTimestamps: "estimate" })).reverse()),
+          () => onErr && onErr());
+      },
+      async addPost(pseudo, txt) {
+        await addDoc(collection(db, "posts"), { p: pseudo, txt, t: serverTimestamp() });
       },
     };
     window.dispatchEvent(new Event("cdb-ready"));
@@ -378,6 +404,10 @@ if (firebaseConfig.apiKey) {
         <button class="btn" id="pseudook">C'est moi</button>
       </div>
       <p class="whomsg" id="whomsg">Ton pseudo s'affiche à côté de tes votes, pour que les potes sachent qui a des goûts de chiotte.</p>
+    </div>
+    <div class="rankbtns">
+      <button class="rankbtn" id="openwins">🏆 Top des meilleures actrices &amp; persos</button>
+      <button class="rankbtn" id="openplayers">🔥 Les beaufs les plus actifs</button>
     </div>
     <div class="modes">
       <article class="ticket">
@@ -408,15 +438,19 @@ if (firebaseConfig.apiKey) {
         <div class="btns"><button class="btn" id="geek">Coup d'envoi</button></div>
       </article>
     </div>
-    <div class="rankbtns">
-      <button class="rankbtn" id="openwins">🏆 Top des meilleures actrices &amp; persos</button>
-      <button class="rankbtn" id="openplayers">🔥 Les beaufs les plus actifs</button>
-    </div>
-    <div class="panel" id="feedpanel" hidden>
-      <h3 class="led">Le mur des potes</h3>
-      <ol class="feed" id="feed"></ol>
-    </div>
     <p class="rules">Tu cliques sur celui ou celle qui te fait le plus kiffer. Pas de mauvaise réponse. Enfin si.</p>
+    <div class="panel chat">
+      <h3 class="led">Le comptoir</h3>
+      <p class="chatsub">Balance tes vannes ici. Tout le monde les voit, et elles restent.</p>
+      <ol class="posts" id="posts"></ol>
+      <p class="rankmsg" id="postsmsg">Chargement du comptoir…</p>
+      <form class="chatform" id="chatform">
+        <label for="chatin" class="sr">Ton message</label>
+        <textarea id="chatin" maxlength="280" rows="2" placeholder="Balance ta vanne…"></textarea>
+        <button class="btn go" id="chatsend" type="submit">Envoyer</button>
+      </form>
+      <p class="whomsg chatmsg" id="chatmsg" aria-live="polite"></p>
+    </div>
   </section>
 
   <!-- CLASSEMENTS -->
@@ -544,28 +578,61 @@ function needPseudo() {
   return !savePseudo();
 }
 
-/* ---------- MUR DES POTES ---------- */
-let feedStarted = false;
-function startFeed() {
-  const st = store();
-  if (!st || feedStarted) return;
-  feedStarted = true;
-  st.watchFeed(items => {
-    const ol = document.getElementById("feed"); ol.innerHTML = "";
-    items.forEach(it => {
-      if (!it || !it.p || !it.w) return;
-      const li = document.createElement("li");
-      const p = document.createElement("span"); p.className = "p"; p.textContent = it.p;
-      const w = document.createElement("span"); w.className = "w"; w.textContent = it.w;
-      const l = document.createElement("span"); l.className = "l"; l.textContent = it.l || "";
-      const m = document.createElement("span"); m.className = "m"; m.textContent = MODE_LABEL[it.m] ? " · " + MODE_LABEL[it.m] : "";
-      li.append(p, document.createTextNode(" a choisi "), w, document.createTextNode(" contre "), l, m);
-      ol.appendChild(li);
-    });
-    document.getElementById("feedpanel").hidden = !ol.children.length;
-  });
+/* ---------- LE COMPTOIR ---------- */
+let postsStarted = false;
+function fmtTime(t) {
+  try {
+    const d = t && t.toDate ? t.toDate() : null;
+    if (!d) return "à l'instant";
+    const p2 = n => String(n).padStart(2, "0");
+    return p2(d.getDate()) + "/" + p2(d.getMonth() + 1) + " · " + p2(d.getHours()) + "h" + p2(d.getMinutes());
+  } catch (e) { return ""; }
 }
-window.addEventListener("cdb-ready", startFeed);
+function startPosts() {
+  const st = store();
+  if (!st || postsStarted) return;
+  postsStarted = true;
+  st.watchPosts(items => {
+    const ol = document.getElementById("posts");
+    const atBottom = ol.scrollHeight - ol.scrollTop - ol.clientHeight < 40;
+    ol.innerHTML = "";
+    items.forEach(it => {
+      if (!it || !it.p || !it.txt) return;
+      const li = document.createElement("li");
+      const h = document.createElement("div"); h.className = "ph";
+      const p = document.createElement("span"); p.className = "pp"; p.textContent = it.p;
+      const t = document.createElement("span"); t.className = "pt"; t.textContent = fmtTime(it.t);
+      h.append(p, t);
+      const x = document.createElement("div"); x.className = "px"; x.textContent = it.txt;
+      li.append(h, x); ol.appendChild(li);
+    });
+    document.getElementById("postsmsg").textContent = ol.children.length ? "" : "Personne n'a encore rien dit. Ouvre le bal.";
+    if (atBottom || !ol.dataset.loaded) ol.scrollTop = ol.scrollHeight;
+    ol.dataset.loaded = "1";
+  }, () => { document.getElementById("postsmsg").textContent = "Le comptoir est fermé pour l'instant. Recharge la page dans un moment."; });
+}
+window.addEventListener("cdb-ready", startPosts);
+setTimeout(() => { if (!store()) document.getElementById("postsmsg").textContent = "Le comptoir est fermé pour l'instant. Recharge la page dans un moment."; }, 8000);
+
+async function sendPost(e) {
+  e.preventDefault();
+  const msg = document.getElementById("chatmsg");
+  const ta = document.getElementById("chatin");
+  const txt = ta.value.replace(/\n{3,}/g, "\n\n").trim().slice(0, 280);
+  if (!txt) { msg.className = "whomsg chatmsg err"; msg.textContent = "Écris quelque chose, champion."; return; }
+  if (!savePseudo()) { msg.className = "whomsg chatmsg err"; msg.textContent = "Mets ton blase en haut de la page d'abord."; return; }
+  const st = store();
+  if (!st) { msg.className = "whomsg chatmsg err"; msg.textContent = "Le comptoir est fermé pour l'instant. Réessaie dans un moment."; return; }
+  const btn = document.getElementById("chatsend"); btn.disabled = true;
+  try {
+    await st.addPost(PSEUDO, txt);
+    ta.value = ""; msg.className = "whomsg chatmsg"; msg.textContent = "";
+    const ol = document.getElementById("posts"); ol.scrollTop = ol.scrollHeight;
+  } catch (err) {
+    msg.className = "whomsg chatmsg err"; msg.textContent = "Message pas envoyé. Réessaie.";
+  }
+  btn.disabled = false;
+}
 
 async function recordChampion(mode, name) {
   const st = store(); if (!st) return null;
@@ -1094,7 +1161,8 @@ $("pseudo").value = PSEUDO;
 if (PSEUDO) { $("whomsg").textContent = "Content de te revoir, " + PSEUDO + ". Choisis ton mode."; }
 $("pseudook").onclick = savePseudo;
 $("pseudo").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); savePseudo(); } });
-startFeed();
+startPosts();
+$("chatform").addEventListener("submit", sendPost);
 $("openwins").onclick = () => openRanks("wins");
 $("openplayers").onclick = () => openRanks("players");
 $("tabwins").onclick = () => openRanks("wins");
