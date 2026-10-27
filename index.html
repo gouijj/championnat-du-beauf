@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Championnat du Beauf</title>
+<title>Championnat du beauf · CDB</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,700;1,800&display=swap">
@@ -209,6 +209,29 @@ button { font: inherit; cursor: pointer; }
 .feed .m { color: var(--muted); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .svoters { display: flex; flex-direction: column; gap: 2px; font-size: 0.98rem; color: var(--chalk-dim); }
 .svoters b { color: var(--chalk); }
+.cdb { display: flex; justify-content: center; align-items: center; gap: 14px; margin-top: 6px; font-size: clamp(1.8rem, 7vw, 3rem); line-height: 1; }
+.cdb .led { font-size: clamp(2rem, 8vw, 3.4rem); letter-spacing: 0.08em; }
+.rankbtns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 460px) { .rankbtns { grid-template-columns: 1fr; } }
+.rankbtn {
+  border: 2px solid var(--led); background: var(--night); color: var(--led); border-radius: 4px;
+  padding: 12px 14px; font-weight: 800; font-size: 1.1rem; letter-spacing: 0.04em; text-transform: uppercase; text-align: center;
+}
+.rankbtn:hover { background: #10261a; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.tabs button {
+  flex: 1 1 180px; border: 2px solid var(--chalk-dim); background: transparent; color: var(--chalk);
+  border-radius: 3px; padding: 10px 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.tabs button[aria-selected="true"] { background: var(--led); border-color: var(--led); color: var(--ink); }
+.ranklist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ranklist li { display: grid; grid-template-columns: 2.4em minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.ranklist li:last-child { border-bottom: 0; }
+.ranklist .pos { font-family: var(--f-display); color: var(--muted); font-variant-numeric: tabular-nums; }
+.ranklist li:nth-child(-n+3) .pos { color: var(--led); }
+.ranklist .nm { font-weight: 800; overflow-wrap: anywhere; }
+.ranklist .sc { color: var(--led); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rankmsg { margin: 0; color: var(--chalk-dim); font-weight: 600; text-align: center; }
 .top-n { color: var(--led); font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* Annonce de tour */
@@ -311,6 +334,8 @@ if (firebaseConfig.apiKey) {
         const left = winner === x;
         const ref = doc(db, "duels", enc(x) + "__" + enc(y));
         await setDoc(ref, { a: x, b: y, [left ? "ca" : "cb"]: increment(1), [left ? "va" : "vb"]: arrayUnion(pseudo) }, { merge: true });
+        setDoc(doc(db, "wins", enc(winner)), { name: winner, wins: increment(1) }, { merge: true }).catch(() => {});
+        setDoc(doc(db, "players", enc(pseudo)), { p: pseudo, votes: increment(1) }, { merge: true }).catch(() => {});
         addDoc(collection(db, "feed"), { p: pseudo, w: winner, l: winner === a ? b : a, m: mode, t: serverTimestamp() }).catch(() => {});
         const d = (await getDoc(ref)).data() || {};
         return { counts: { [x]: d.ca || 0, [y]: d.cb || 0 }, voters: { [x]: d.va || [], [y]: d.vb || [] } };
@@ -319,6 +344,12 @@ if (firebaseConfig.apiKey) {
         await setDoc(doc(db, "champs", mode, "names", enc(name)), { mode, name, titles: increment(1) }, { merge: true });
         const snap = await getDocs(query(collection(db, "champs", mode, "names"), orderBy("titles", "desc"), limit(10)));
         return snap.docs.map(d => ({ name: d.data().name, titles: d.data().titles }));
+      },
+      async ranks(kind) {
+        const coll = kind === "players" ? "players" : "wins";
+        const field = kind === "players" ? "votes" : "wins";
+        const snap = await getDocs(query(collection(db, coll), orderBy(field, "desc"), limit(30)));
+        return snap.docs.map(d => { const x = d.data(); return { name: kind === "players" ? x.p : x.name, score: x[field] || 0 }; });
       },
       watchFeed(cb) {
         return onSnapshot(query(collection(db, "feed"), orderBy("t", "desc"), limit(25)),
@@ -333,7 +364,8 @@ if (firebaseConfig.apiKey) {
 <body>
 <div class="wrap">
   <header class="board" id="board">
-    <h1 class="led">Le Grand Championnat du Beauf</h1>
+    <h1 class="led">Championnat du beauf</h1>
+    <div class="cdb"><span aria-hidden="true">🍑</span><span class="led">CDB</span><span aria-hidden="true">🍆</span></div>
     <p>Saison 2026 · Arbitrage vidéo : aucun</p>
   </header>
 
@@ -376,11 +408,32 @@ if (firebaseConfig.apiKey) {
         <div class="btns"><button class="btn" id="geek">Coup d'envoi</button></div>
       </article>
     </div>
+    <div class="rankbtns">
+      <button class="rankbtn" id="openwins">🏆 Top des meilleures actrices &amp; persos</button>
+      <button class="rankbtn" id="openplayers">🔥 Les beaufs les plus actifs</button>
+    </div>
     <div class="panel" id="feedpanel" hidden>
       <h3 class="led">Le mur des potes</h3>
       <ol class="feed" id="feed"></ol>
     </div>
     <p class="rules">Tu cliques sur celui ou celle qui te fait le plus kiffer. Pas de mauvaise réponse. Enfin si.</p>
+  </section>
+
+  <!-- CLASSEMENTS -->
+  <section id="ranks" class="screen" hidden>
+    <div class="hud">
+      <span class="where led">Les classements</span>
+      <button class="quit" id="ranksback">Retour</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tabwins" aria-selected="true">Top actrices &amp; persos</button>
+      <button role="tab" id="tabplayers" aria-selected="false">Beaufs les plus actifs</button>
+    </div>
+    <div class="panel">
+      <h3 class="led" id="rankh">Top des meilleures actrices &amp; persos</h3>
+      <ol class="ranklist" id="ranklist"></ol>
+      <p class="rankmsg" id="rankmsg"></p>
+    </div>
   </section>
 
   <!-- ANNONCE DE TOUR -->
@@ -585,8 +638,9 @@ const WOMEN_DUELS = [
   ["Audrey Tautou","Audrey Fleurot","Même prénom"],
   ["Virginie Efira","Virginie Ledoyen","Même prénom"],
   ["Camille Cottin","Camille Lellouche","Même prénom"],
+  ["Marine Lorphelin","Malika Ménard","Les Miss France"],
 ];
-const WOMEN_EXTRA = ["Mia Khalifa","Gracie Abrams"];
+const WOMEN_EXTRA = ["Mia Khalifa","Gracie Abrams","Vanessa Demouy","Noémie Lenoir"];
 const WOMEN_POOL = [...new Set([...WOMEN_DUELS.flatMap(d => [d[0], d[1]]), ...WOMEN_EXTRA])];
 
 const DECON_DUELS = [
@@ -685,8 +739,25 @@ const LOOK = ["Connais pas ? Ah la honte !", "Tu sors d'une grotte ?", "Va déco
 const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>';
 
 /* ---------- RÉGLAGES ---------- */
-const DECON_POOL = [...new Set(DECON_DUELS.flatMap(d => [d[0], d[1]]))];
-const GEEK_POOL = [...new Set(GEEK_DUELS.flatMap(d => [d[0], d[1]]))];
+const SHARED_EXTRA = [
+  "La bite de blanc de Gouijj", "Le crâne de Canac", "La choucroute de Mut",
+  "Le coup de boule de Zizou", "Le genou de R9", "Le Ballon d'Or de Kyky", "Les larmes de Neymar", "Les abdos de CR7",
+  "Vladimir Poutine", "De la poutine", "Vladimir Cosma", "Vladimir Cauchemar", "Donald Trump",
+];
+const DECON_POOL = [...new Set([...DECON_DUELS.flatMap(d => [d[0], d[1]]), ...SHARED_EXTRA])];
+const GEEK_POOL = [...new Set([...GEEK_DUELS.flatMap(d => [d[0], d[1]]), ...SHARED_EXTRA])];
+// Liens Google détournés
+const LINK_QUERY = {
+  "La bite de blanc de Gouijj": "Éric Zemmour",
+  "Le crâne de Canac": "Alain Soral",
+  "La choucroute de Mut": "mouton",
+  "De la poutine": "poutine plat québécois",
+  "Le genou de R9": "Ronaldo R9 genou blessure",
+  "Le coup de boule de Zizou": "coup de boule Zidane 2006",
+  "Les larmes de Neymar": "Neymar larmes",
+  "Les abdos de CR7": "Cristiano Ronaldo abdos",
+  "Le Ballon d'Or de Kyky": "Mbappé Ballon d'Or",
+};
 const pairKey = (a, b) => [a, b].sort().join("|");
 const PAIR_TAGS = {};
 [...WOMEN_DUELS, ...DECON_DUELS, ...GEEK_DUELS].forEach(d => { PAIR_TAGS[pairKey(d[0], d[1])] = d[2]; });
@@ -705,7 +776,7 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 let lastLine = "";
 function line(pool) { let l, n = 0; do { l = pick(pool); n++; } while (l === lastLine && n < 6); lastLine = l; return l; }
 const noLink = n => /^(Un|Une|Ton) /.test(n);
-const lookUrl = n => "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(n);
+const lookUrl = n => "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(LINK_QUERY[n] || n);
 const plural = (n, w) => n + " " + w + (n > 1 ? "s" : "");
 
 function gamesPlayed(inc) {
@@ -733,7 +804,7 @@ function pickDuels(n) {
 let S = null, hesTimer = null, nextTimer = null, locked = false;
 
 function show(id) {
-  ["menu", "round", "game", "end"].forEach(s => { $(s).hidden = s !== id; });
+  ["menu", "ranks", "round", "game", "end"].forEach(s => { $(s).hidden = s !== id; });
   $("board").hidden = id !== "menu";
   window.scrollTo(0, 0);
 }
@@ -987,12 +1058,48 @@ function renderBracket() {
   body.appendChild(box); col.append(h, body); el.appendChild(col);
 }
 
+/* ---------- CLASSEMENTS ---------- */
+let rankKind = "wins", rankReq = 0;
+async function openRanks(kind) {
+  rankKind = kind;
+  const isP = kind === "players";
+  $("tabwins").setAttribute("aria-selected", String(!isP));
+  $("tabplayers").setAttribute("aria-selected", String(isP));
+  $("rankh").textContent = isP ? "Les beaufs les plus actifs" : "Top des meilleures actrices & persos";
+  $("ranklist").innerHTML = "";
+  $("rankmsg").textContent = "Chargement du classement…";
+  show("ranks");
+  const st = store();
+  if (!st || !st.ranks) { $("rankmsg").textContent = "Classement indisponible pour l'instant. Recharge la page dans un moment."; return; }
+  const req = ++rankReq;
+  let rows = null;
+  try { rows = await st.ranks(kind); } catch (e) { rows = null; }
+  if (req !== rankReq || $("ranks").hidden) return;
+  if (!rows) { $("rankmsg").textContent = "Le classement n'a pas pu se charger. Réessaie dans un moment."; return; }
+  if (!rows.length) { $("rankmsg").textContent = isP ? "Personne n'a encore voté. Lance-toi, champion." : "Aucune victoire pour l'instant. Va jouer."; return; }
+  $("rankmsg").textContent = "";
+  const ol = $("ranklist");
+  rows.forEach((r, i) => {
+    const li = document.createElement("li");
+    const pos = document.createElement("span"); pos.className = "pos"; pos.textContent = i + 1;
+    const nm = document.createElement("span"); nm.className = "nm"; nm.textContent = r.name || "?";
+    const sc = document.createElement("span"); sc.className = "sc";
+    sc.textContent = r.score + (isP ? " vote" : " victoire") + (r.score > 1 ? "s" : "");
+    li.append(pos, nm, sc); ol.appendChild(li);
+  });
+}
+
 /* ---------- BRANCHEMENTS ---------- */
 $("pseudo").value = PSEUDO;
 if (PSEUDO) { $("whomsg").textContent = "Content de te revoir, " + PSEUDO + ". Choisis ton mode."; }
 $("pseudook").onclick = savePseudo;
 $("pseudo").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); savePseudo(); } });
 startFeed();
+$("openwins").onclick = () => openRanks("wins");
+$("openplayers").onclick = () => openRanks("players");
+$("tabwins").onclick = () => openRanks("wins");
+$("tabplayers").onclick = () => openRanks("players");
+$("ranksback").onclick = () => { rankReq++; show("menu"); };
 $("cup-full").onclick = () => start("cup", 16);
 $("cup-short").onclick = () => start("cup", 8);
 $("hill").onclick = () => start("hill");
