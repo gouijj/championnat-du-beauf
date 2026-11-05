@@ -255,6 +255,15 @@ button { font: inherit; cursor: pointer; }
 .chatmsg { color: var(--chalk-dim); min-height: 1.2em; }
 .chatmsg.err { color: var(--red); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tag.wink { background: var(--led); color: var(--ink); border-color: var(--led); }
+.mu.wink { border-color: var(--led); }
+.mu.wink i { color: var(--led); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button {
+  border: 1px solid var(--line); background: var(--night); color: var(--chalk-dim); border-radius: 999px;
+  padding: 6px 12px; font-weight: 700; font-size: 0.95rem;
+}
+.chips button[aria-pressed="true"] { background: var(--chalk); color: var(--ink); border-color: var(--chalk); }
 .top-n { color: var(--led); font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* Annonce de tour */
@@ -352,12 +361,13 @@ if (firebaseConfig.apiKey) {
     const db = getFirestore(initializeApp(firebaseConfig));
     const enc = s => encodeURIComponent(s);
     window.cdbStore = {
-      async vote(a, b, winner, pseudo, mode) {
+      async vote(a, b, winner, pseudo, cat) {
         const [x, y] = [a, b].sort();
         const left = winner === x;
         const ref = doc(db, "duels", enc(x) + "__" + enc(y));
         await setDoc(ref, { a: x, b: y, [left ? "ca" : "cb"]: increment(1), [left ? "va" : "vb"]: arrayUnion(pseudo) }, { merge: true });
         setDoc(doc(db, "wins", enc(winner)), { name: winner, wins: increment(1) }, { merge: true }).catch(() => {});
+        if (cat) setDoc(doc(db, "wincats", cat, "names", enc(winner)), { cat, name: winner, wins: increment(1) }, { merge: true }).catch(() => {});
         setDoc(doc(db, "players", enc(pseudo)), { p: pseudo, votes: increment(1) }, { merge: true }).catch(() => {});
         const d = (await getDoc(ref)).data() || {};
         return { counts: { [x]: d.ca || 0, [y]: d.cb || 0 }, voters: { [x]: d.va || [], [y]: d.vb || [] } };
@@ -367,10 +377,11 @@ if (firebaseConfig.apiKey) {
         const snap = await getDocs(query(collection(db, "champs", mode, "names"), orderBy("titles", "desc"), limit(10)));
         return snap.docs.map(d => ({ name: d.data().name, titles: d.data().titles }));
       },
-      async ranks(kind) {
-        const coll = kind === "players" ? "players" : "wins";
+      async ranks(kind, cat) {
         const field = kind === "players" ? "votes" : "wins";
-        const snap = await getDocs(query(collection(db, coll), orderBy(field, "desc"), limit(30)));
+        const coll = kind === "players" ? collection(db, "players")
+          : (cat && cat !== "all") ? collection(db, "wincats", cat, "names") : collection(db, "wins");
+        const snap = await getDocs(query(coll, orderBy(field, "desc"), limit(30)));
         return snap.docs.map(d => { const x = d.data(); return { name: kind === "players" ? x.p : x.name, score: x[field] || 0 }; });
       },
       watchPosts(cb, onErr) {
@@ -411,31 +422,47 @@ if (firebaseConfig.apiKey) {
     </div>
     <div class="modes">
       <article class="ticket">
-        <span class="kicker">Mode 1 · Tableau final</span>
+        <span class="kicker">Mode 1 · Actrices</span>
         <h2>La Coupe du Monde</h2>
-        <p>Premier tour en duels de sosies, sœurs et partenaires d'écran. Ensuite, le cœur parle jusqu'à la finale.</p>
+        <p>Tableau tiré au sort, de A à Z. Si deux sœurs ou deux sosies se croisent, le clin d'œil s'affiche.</p>
         <div class="btns">
           <button class="btn" id="cup-full">16èmes · 31 matchs</button>
           <button class="btn alt" id="cup-short">Express · 15 matchs</button>
         </div>
       </article>
       <article class="ticket">
-        <span class="kicker">Mode 2 · 15 matchs</span>
+        <span class="kicker">Mode 2 · Actrices</span>
         <h2>La Reine de la Colline</h2>
-        <p>Une tenante du titre, des challengeuses tirées au sort. Celle qui gagne reste sur le terrain.</p>
+        <p>Une tenante du titre, des challengeuses tirées au sort. Celle qui gagne reste sur le terrain, 15 matchs.</p>
         <div class="btns"><button class="btn" id="hill">Coup d'envoi</button></div>
       </article>
       <article class="ticket">
-        <span class="kicker">Mode 3 · 15 matchs</span>
+        <span class="kicker">Mode 3 · Femmes politiques</span>
+        <h2>La Présidentielle du Beauf</h2>
+        <p>64 femmes politiques de tous bords. Une seule repart avec l'écharpe.</p>
+        <div class="btns">
+          <button class="btn" id="polcup-full">Coupe · 31 matchs</button>
+          <button class="btn alt" id="polcup-short">Express · 15</button>
+          <button class="btn alt" id="pol">Colline · 15</button>
+        </div>
+      </article>
+      <article class="ticket">
+        <span class="kicker">Mode 4 · Les mecs</span>
         <h2>Le Mode Déconstruit</h2>
-        <p>Comme la colline : celui qui gagne reste sur le trône. Hommes, femmes, gode, lave-vaisselle, Thermomix… tout le monde se mélange.</p>
+        <p>Que des vrais mecs : acteurs, footballeurs, Eric et Ramzy, Tibo InShape. Celui qui gagne reste sur le trône, 15 matchs.</p>
         <div class="btns"><button class="btn" id="decon">Coup d'envoi</button></div>
       </article>
       <article class="ticket">
-        <span class="kicker">Mode 4 · 15 matchs</span>
+        <span class="kicker">Mode 5 · 100 % fiction</span>
         <h2>Le Mode Geek</h2>
-        <p>Comme la colline : celui qui gagne reste sur le trône. Sangoku, Dark Vador, Harley Quinn, Thanos et les actrices qui les jouent.</p>
+        <p>Sangoku, Dark Vador, Harley Quinn, Thanos, Homer Simpson. Celui qui gagne reste sur le trône, 15 matchs.</p>
         <div class="btns"><button class="btn" id="geek">Coup d'envoi</button></div>
+      </article>
+      <article class="ticket">
+        <span class="kicker">Mode 6 · Aucune limite</span>
+        <h2>Le Grand N'importe Quoi</h2>
+        <p>Le Ricard contre Pascal Praud, la choucroute de Mut contre ChatGPT, Macron contre un lave-vaisselle. Celui qui gagne reste, 15 matchs.</p>
+        <div class="btns"><button class="btn" id="wtf">Coup d'envoi</button></div>
       </article>
     </div>
     <p class="rules">Tu cliques sur celui ou celle qui te fait le plus kiffer. Pas de mauvaise réponse. Enfin si.</p>
@@ -462,6 +489,14 @@ if (firebaseConfig.apiKey) {
     <div class="tabs" role="tablist">
       <button role="tab" id="tabwins" aria-selected="true">Top actrices &amp; persos</button>
       <button role="tab" id="tabplayers" aria-selected="false">Beaufs les plus actifs</button>
+    </div>
+    <div class="chips" id="rankcats">
+      <button data-cat="all" aria-pressed="true">Tout confondu</button>
+      <button data-cat="act" aria-pressed="false">Actrices</button>
+      <button data-cat="pol" aria-pressed="false">Femmes politiques</button>
+      <button data-cat="men" aria-pressed="false">Mecs</button>
+      <button data-cat="geek" aria-pressed="false">Geek</button>
+      <button data-cat="wtf" aria-pressed="false">N'importe quoi</button>
     </div>
     <div class="panel">
       <h3 class="led" id="rankh">Top des meilleures actrices &amp; persos</h3>
@@ -556,7 +591,7 @@ const store = () => window.cdbStore || null;
 
 async function recordVote(mode, a, b, winner) {
   const st = store(); if (!st) return null;
-  try { return await st.vote(a, b, winner, PSEUDO, mode); } catch (e) { return null; }
+  try { return await st.vote(a, b, winner, PSEUDO, CAT[mode]); } catch (e) { return null; }
 }
 
 /* ---------- PSEUDO ---------- */
@@ -710,12 +745,14 @@ const WOMEN_DUELS = [
 const WOMEN_EXTRA = ["Mia Khalifa","Gracie Abrams","Vanessa Demouy","Noémie Lenoir"];
 const WOMEN_POOL = [...new Set([...WOMEN_DUELS.flatMap(d => [d[0], d[1]]), ...WOMEN_EXTRA])];
 
-const DECON_DUELS = [
+// Mode Déconstruit : que des vrais mecs.
+const MEN_DUELS = [
   ["Javier Bardem","Jeffrey Dean Morgan","Sosies notoires"],
   ["Tom Hardy","Logan Marshall-Green","Sosies notoires"],
   ["Ryan Gosling","Ryan Reynolds","Les Ryan"],
   ["Chris Pratt","Chris Evans","Les Chris"],
   ["Chris Hemsworth","Chris Pine","Les Chris"],
+  ["Chris Evans","Chris Hemsworth","Les Chris"],
   ["Eric Judor","Ramzy Bédia","Eric et Ramzy"],
   ["Omar Sy","Fred Testot","Omar et Fred"],
   ["Omar Sy","François Cluzet","Intouchables"],
@@ -723,40 +760,18 @@ const DECON_DUELS = [
   ["Brad Pitt","George Clooney","Ocean's Eleven"],
   ["Brad Pitt","Leonardo DiCaprio","Once Upon a Time in Hollywood"],
   ["Tibo InShape","Dwayne Johnson","Concours de biscotos"],
-  ["Timothée Chalamet","Zendaya","Homme contre femme · Dune"],
-  ["Brad Pitt","Angelina Jolie","Homme contre femme · Mr. & Mrs. Smith"],
-  ["Ryan Gosling","Margot Robbie","Homme contre femme · Barbie"],
-  ["Leonardo DiCaprio","Kate Winslet","Homme contre femme · Titanic"],
-  ["Omar Sy","Audrey Fleurot","Homme contre femme · Intouchables"],
-  ["Un homme","Un gode","Homme contre objet"],
-  ["Un homme qui fait jamais la vaisselle","Un lave-vaisselle","Homme contre objet"],
-  ["Un homme","Un Thermomix","Homme contre objet"],
-  ["Ton mec","Un plaid + Netflix","Homme contre objet"],
-  ["Un homme","Un chat","Homme contre objet"],
-  ["Un homme","Une bouillotte en janvier","Homme contre objet"],
-  ["Un homme qui dit « je vais t'expliquer »","Une notice IKEA","Homme contre objet"],
-  ["Ton ex","Un pot de Nutella","Homme contre objet"],
-  ["Tibo InShape","Une barre protéinée","Homme contre objet"],
-  ["Brad Pitt","Une raclette","Homme contre objet"],
-  ["Ryan Gosling","Un plaid + Netflix","Homme contre objet"],
+  ["Hugh Jackman","Ryan Reynolds","Deadpool & Wolverine"],
+  ["Zinédine Zidane","David Beckham","Les Galácticos du Real"],
+  ["Cristiano Ronaldo","David Beckham","Manchester United"],
+  ["Kylian Mbappé","Neymar","Le PSG"],
+  ["Antoine Griezmann","Olivier Giroud","Champions du monde 2018"],
+  ["Kylian Mbappé","Antoine Griezmann","Champions du monde 2018"],
 ];
+const MEN_EXTRA = ["Timothée Chalamet","Henry Cavill","Ian Scott"];
 
+// Mode Geek : 100 % fiction.
 const GEEK_DUELS = [
   ["Sangoku","Superman","Le choc des costauds"],
-  ["Batman","Ian Scott","Proposé par la direction"],
-  ["Hugh Jackman","Wolverine","L'acteur contre son perso"],
-  ["Henry Cavill","Geralt de Riv","L'acteur contre son perso"],
-  ["Margot Robbie","Harley Quinn","L'actrice contre son perso"],
-  ["Gal Gadot","Wonder Woman","L'actrice contre son perso"],
-  ["Angelina Jolie","Lara Croft","L'actrice contre son perso"],
-  ["Scarlett Johansson","Motoko Kusanagi","L'actrice contre son perso"],
-  ["Jennifer Lawrence","Mystique","L'actrice contre son perso"],
-  ["Anne Hathaway","Catwoman","L'actrice contre son perso"],
-  ["Zoe Saldaña","Gamora","L'actrice contre son perso"],
-  ["Sydney Sweeney","Jessica Rabbit","Le réel contre le dessin"],
-  ["Ana de Armas","Bulma (Dragon Ball Z)","Le réel contre le dessin"],
-  ["Monica Bellucci","Nico Robin","Le réel contre le dessin"],
-  ["Megan Fox","Tifa Lockhart","Le réel contre le dessin"],
   ["Spike Spiegel","Han Solo","Les cow-boys de l'espace"],
   ["Dark Vador","Thanos","Les grands méchants"],
   ["Voldemort","Dark Vador","Sans nez contre sans visage"],
@@ -775,9 +790,90 @@ const GEEK_DUELS = [
   ["Fujiko Mine","Jessica Rabbit","Les fatales"],
   ["Thanos","Gamora","Père contre fille adoptive"],
   ["Vegeta","Sangoku","Les Saiyans"],
+  ["Bulma","Vegeta","Mari et femme"],
   ["Krilin","Dark Maul","Les crânes rasés"],
   ["Aragorn","Geralt de Riv","Les ténébreux"],
   ["Shrek","Fiona","Couple d'ogres"],
+  ["Wolverine","Deadpool","Deadpool & Wolverine"],
+  ["Batman","Le Joker","Ennemis jurés"],
+  ["Thor","Hulk","Le combat de Thor : Ragnarok"],
+  ["Homer Simpson","Marge Simpson","Les Simpson"],
+  ["Astérix","Obélix","Les Gaulois"],
+];
+const GEEK_EXTRA = ["Mystique","Motoko Kusanagi","Nico Robin","Kratos","Captain America","Capitaine Haddock","Rick Sanchez","Lucky Luke","Mario"];
+
+// Le Grand N'importe Quoi.
+const WTF_DUELS = [
+  ["Un homme","Un gode","Homme contre objet"],
+  ["Un homme qui fait jamais la vaisselle","Un lave-vaisselle","Homme contre objet"],
+  ["Un homme","Un Thermomix","Homme contre objet"],
+  ["Ton mec","Un plaid + Netflix","Homme contre objet"],
+  ["Un homme","Un chat","Homme contre objet"],
+  ["Un homme","Une bouillotte en janvier","Homme contre objet"],
+  ["Un homme qui dit « je vais t'expliquer »","Une notice IKEA","Homme contre objet"],
+  ["Ton ex","Un pot de Nutella","Homme contre objet"],
+  ["PSG","OM","Le Classique"],
+  ["Apple","Samsung","La guerre des smartphones"],
+  ["Claude","ChatGPT","La guerre des IA"],
+  ["Claude","Gemini","La guerre des IA"],
+  ["ChatGPT","Gemini","La guerre des IA"],
+  ["Gros seins","Petite poitrine","Le débat du siècle"],
+  ["Petite bite","Gros pénis","Le débat du siècle"],
+  ["Bière","Ricard","L'apéro"],
+  ["Pascal Praud","Léa Salamé","Les plateaux télé"],
+  ["Vladimir Poutine","De la poutine","Rien à voir"],
+  ["Tesla","Renault Scénic","Le choc des bagnoles"],
+  ["Les abdos de CR7","Mes pecs","Concours de muscles"],
+  ["Donald Trump","Emmanuel Macron","La poignée de main de 2017"],
+];
+const WTF_EXTRA = [
+  "La bite de blanc de Gouijj", "Le crâne de Canac", "La choucroute de Mut",
+  "Le coup de boule de Zizou", "Le genou de R9", "Le Ballon d'Or de Kyky", "Les larmes de Neymar",
+  "Une barre protéinée", "Une raclette", "Jean-Marie Le Pen", "Hitler", "Mao", "Mussolini",
+  "iPhone Duo", "Gros tarpé", "P'tit cul", "Skinny", "Calvitie",
+];
+
+// Femmes politiques.
+const POL_LIST = [
+  "Marine Le Pen","Ségolène Royal","Marion Maréchal","Cécilia Attias","Aurore Bergé","Roselyne Bachelot",
+  "Rachida Dati","Rama Yade","Claude Chirac","Najat Vallaud-Belkacem","Audrey Pulvar","Élisabeth Guigou",
+  "Ingrid Betancourt","Christine Boutin","Édith Cresson","Arlette Laguiller","Anne Hidalgo","Simone Veil",
+  "Martine Aubry","Christine Lagarde","Clémentine Autain","Valérie Pécresse","Nadine Morano","Manon Aubry",
+  "Marlène Schiappa","Jeannette Bougrab","Cécile Duflot","Isabelle Balkany","Dominique Voynet","Fadela Amara",
+  "Nathalie Arthaud","Marie-George Buffet","Myriam El Khomri","Mathilde Panot","Gisèle Halimi",
+  "Nathalie Kosciusko-Morizet","Françoise de Panafieu","Laurence Parisot","Sibeth Ndiaye","Nicole Belloubet",
+  "Christiane Taubira","Marisol Touraine","Aurélie Filippetti","Delphine Batho","Fleur Pellerin","Brune Poirson",
+  "Amélie de Montchalin","Michèle Alliot-Marie","Agnès Pannier-Runacher","Yaël Braun-Pivet","Sandrine Rousseau",
+  "Clémence Guetté","Marine Tondelier","Lucie Castets","Prisca Thevenot","Rima Hassan","Sarah Knafo",
+  "Maud Bregeon","Alexandria Ocasio-Cortez","Amélie Oudéa-Castéra","Michelle Obama","Giorgia Meloni",
+  "Angela Merkel","Sabrina Agresti-Roubache",
+];
+const POL_DUELS = [
+  ["Marine Le Pen","Marion Maréchal","Tante et nièce"],
+  ["Alexandria Ocasio-Cortez","Amélie Oudéa-Castéra","Les deux AOC"],
+  ["Martine Aubry","Manon Aubry","Les deux Aubry (aucun lien de parenté)"],
+  ["Marine Le Pen","Marine Tondelier","Les deux Marine"],
+  ["Christine Boutin","Christine Lagarde","Les deux Christine"],
+  ["Nathalie Arthaud","Nathalie Kosciusko-Morizet","Les deux Nathalie"],
+  ["Amélie de Montchalin","Amélie Oudéa-Castéra","Les deux Amélie"],
+  ["Nathalie Arthaud","Arlette Laguiller","Lutte ouvrière, la relève"],
+  ["Ségolène Royal","Martine Aubry","Le congrès de Reims 2008"],
+  ["Ségolène Royal","Marine Le Pen","Finalistes de la présidentielle"],
+  ["Rachida Dati","Anne Hidalgo","La bataille de Paris 2020"],
+  ["Valérie Pécresse","Anne Hidalgo","Candidates à la présidentielle 2022"],
+  ["Christiane Taubira","Nicole Belloubet","Gardes des Sceaux"],
+  ["Élisabeth Guigou","Christiane Taubira","Gardes des Sceaux"],
+  ["Rachida Dati","Michèle Alliot-Marie","Gardes des Sceaux"],
+  ["Sibeth Ndiaye","Prisca Thevenot","Porte-parole du gouvernement"],
+  ["Najat Vallaud-Belkacem","Maud Bregeon","Porte-parole du gouvernement"],
+  ["Rama Yade","Fadela Amara","Le gouvernement Fillon"],
+  ["Marine Tondelier","Sandrine Rousseau","Les Écolos"],
+  ["Cécile Duflot","Dominique Voynet","Les Écolos"],
+  ["Mathilde Panot","Clémence Guetté","Les Insoumises"],
+  ["Manon Aubry","Rima Hassan","Les Insoumises à Bruxelles"],
+  ["Lucie Castets","Marine Tondelier","Le Nouveau Front populaire"],
+  ["Sarah Knafo","Marion Maréchal","Ex-camarades de Reconquête"],
+  ["Michelle Obama","Alexandria Ocasio-Cortez","Les Américaines"],
 ];
 
 /* ---------- COMMENTAIRES ---------- */
@@ -787,9 +883,13 @@ const BEFORE = [
   "Ton historique de navigation a déjà voté.", "Si t'hésites, t'as déjà perdu.",
   "Change d'appli, y'a ta meuf qui arrive !",
 ];
-const BEFORE_WOMEN = ["Qui est la plus bonne !?", "On dirait trop la mère de ton pote !"];
-const BEFORE_GEEK = ["Ta collection de figurines te regarde.", "Personne te juge, t'es dans ta chambre."];
-const BEFORE_DECON = ["Déconstruit, oui. Aveugle, non.", "Ta déconstruction est en cours de chargement…"];
+const BEFORE_BY_CAT = {
+  act: ["Qui est la plus bonne !?", "On dirait trop la mère de ton pote !"],
+  pol: ["Qui est la plus bonne !?", "Ton vote compte plus ici qu'aux législatives.", "Pas de 49.3 : c'est toi qui décides.", "Gauche, droite… on s'en fout, ici c'est le physique."],
+  men: ["Déconstruit, oui. Aveugle, non.", "Ta déconstruction est en cours de chargement…"],
+  geek: ["Ta collection de figurines te regarde.", "Personne te juge, t'es dans ta chambre."],
+  wtf: ["Personne ne comprend ce match. Toi non plus.", "Là, t'as pas le droit de te tromper.", "Le jury a fumé avant de faire ce tirage."],
+};
 const HESITATE = ["T'hésites ou tu te touches ?", "T'es long ! On dirait ma bite !", "T'es long ! On te le dit pas souvent ça."];
 const AFTER = [
   "ET C'EST LE DRAAAME !", "On n'avait pas vu ça depuis 98 !", "Même ton oncle bourré n'aurait pas fait ce choix.",
@@ -797,22 +897,28 @@ const AFTER = [
   "Haha, t'as vraiment des goûts de merde !", "T'es qui pour juger ? T'as vu ta gueule !",
   "Arrête de voter, y'a ta meuf qui t'attend !", "Tu fais partie des 0,5 % de la population mondiale.",
 ];
-const AFTER_WOMEN = ["Bien vu, mais elle, jamais elle clique sur toi !", "Tu vaux mieux qu'elle."];
+const AFTER_BY_CAT = {
+  act: ["Bien vu, mais elle, jamais elle clique sur toi !", "Tu vaux mieux qu'elle."],
+  pol: ["Bien vu, mais elle, jamais elle clique sur toi !", "DISSOLUTION !!", "Même le 49.3 ne te sauvera pas de ce choix.", "Ce vote sera commenté sur tous les plateaux télé."],
+  men: [], geek: [],
+  wtf: ["Choix validé par le comité du n'importe quoi.", "On ne posera pas de questions."],
+};
+const DICTATORS = new Set(["Hitler", "Mao", "Mussolini"]);
+const AFTER_DICTATOR = ["Euh… On va faire comme si on n'avait rien vu.", "Ton historique vient d'être transmis à la DGSI.", "Même ton oncle bourré a quitté la table.", "Ça, tu vas devoir l'expliquer au comptoir."];
 const CLINGY = "Tu t'accroches, c'est flippant !";
 const ROUND_LINES = ["Ça sent la bagarre.", "Les choses sérieuses commencent.", "Accroche-toi à ton slip.", "Préviens ta meuf, t'en as pour un moment."];
 const FINAL_LINE = "Le moment que tout le pays attendait. Respire.";
 const CHAMP_LINES = ["Tu rêverais de la ramener à la maison.", "Présente-la à ta mère, elle va adorer.", "Avoue, tu vas l'encadrer au-dessus de ton lit."];
+const POL_CHAMP_LINES = ["Tu rêverais de la ramener à la maison.", "Elle a ton vote. Dès le premier tour.", "Tu vas coller son affiche dans ta chambre."];
 const LOOK = ["Connais pas ? Ah la honte !", "Tu sors d'une grotte ?", "Va découvrir cette merveille"];
 const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>';
 
 /* ---------- RÉGLAGES ---------- */
-const SHARED_EXTRA = [
-  "La bite de blanc de Gouijj", "Le crâne de Canac", "La choucroute de Mut",
-  "Le coup de boule de Zizou", "Le genou de R9", "Le Ballon d'Or de Kyky", "Les larmes de Neymar", "Les abdos de CR7",
-  "Vladimir Poutine", "De la poutine", "Vladimir Cosma", "Vladimir Cauchemar", "Donald Trump",
-];
-const DECON_POOL = [...new Set([...DECON_DUELS.flatMap(d => [d[0], d[1]]), ...SHARED_EXTRA])];
-const GEEK_POOL = [...new Set([...GEEK_DUELS.flatMap(d => [d[0], d[1]]), ...SHARED_EXTRA])];
+const uniq = (duels, extra) => [...new Set([...duels.flatMap(d => [d[0], d[1]]), ...extra])];
+const MEN_POOL = uniq(MEN_DUELS, MEN_EXTRA);
+const GEEK_POOL = uniq(GEEK_DUELS, GEEK_EXTRA);
+const WTF_POOL = uniq(WTF_DUELS, WTF_EXTRA);
+const POL_POOL = uniq(POL_DUELS, POL_LIST);
 // Liens Google détournés
 const LINK_QUERY = {
   "La bite de blanc de Gouijj": "Éric Zemmour",
@@ -824,15 +930,38 @@ const LINK_QUERY = {
   "Les larmes de Neymar": "Neymar larmes",
   "Les abdos de CR7": "Cristiano Ronaldo abdos",
   "Le Ballon d'Or de Kyky": "Mbappé Ballon d'Or",
+  "Claude": "Claude IA Anthropic",
+  "Gemini": "Gemini IA Google",
+  "Apple": "logo Apple",
+  "Tesla": "voiture Tesla",
+  "PSG": "Paris Saint-Germain football",
+  "OM": "Olympique de Marseille",
+  "Bière": "pinte de bière",
+  "Ricard": "verre de Ricard",
 };
+// Pas de lien Google pour ceux-là
+const NO_LINK = new Set(["Gros seins", "Petite bite", "Gros pénis", "Petite poitrine", "Gros tarpé", "P'tit cul", "Skinny", "Mes pecs", "Calvitie", ...DICTATORS]);
 const pairKey = (a, b) => [a, b].sort().join("|");
 const PAIR_TAGS = {};
-[...WOMEN_DUELS, ...DECON_DUELS, ...GEEK_DUELS].forEach(d => { PAIR_TAGS[pairKey(d[0], d[1])] = d[2]; });
+[...WOMEN_DUELS, ...MEN_DUELS, ...GEEK_DUELS, ...WTF_DUELS, ...POL_DUELS].forEach(d => { PAIR_TAGS[pairKey(d[0], d[1])] = d[2]; });
+const tagFor = (a, b) => PAIR_TAGS[pairKey(a, b)] || "";
+
+// Catégorie de chaque mode, pour les commentaires et le classement
+const CAT = { cup: "act", hill: "act", polcup: "pol", pol: "pol", decon: "men", geek: "geek", wtf: "wtf" };
+const CAT_LABEL = { all: "Tout confondu", act: "Actrices", pol: "Femmes politiques", men: "Mecs", geek: "Geek", wtf: "N'importe quoi" };
+
+const CUP_INFO = {
+  cup: { pool: WOMEN_POOL, name: "Coupe du Monde", k: "Championne du monde", quotes: CHAMP_LINES, emoji: "🏆", label: "Ma championne du monde", bh: "Championne", final: "Une seule repartira avec la coupe.", toph: "Les championnes des potes" },
+  polcup: { pool: POL_POOL, name: "La Présidentielle du Beauf", k: "Élue Présidente du Beauf", quotes: POL_CHAMP_LINES, emoji: "🏛️", label: "Ma présidente du Beauf", bh: "Présidente", final: "Une seule repartira avec l'écharpe.", toph: "Les présidentes des potes" },
+};
 const HILL_INFO = {
   hill: { name: "La Reine de la Colline", pool: WOMEN_POOL, holder: "Tenante du titre", first: "Tenante du titre contre challengeuse", k: "Reine de la Colline", emoji: "👑", end: "Elle a tout bouffé. Respect." },
-  decon: { name: "Le Mode Déconstruit", pool: DECON_POOL, holder: "Sur le trône", first: "Le trône est à prendre", k: "Sur le trône du Mode Déconstruit", emoji: "🧠", end: "Déconstruit, mais pas trop. Parfait." },
+  pol: { name: "La Reine de l'Hémicycle", pool: POL_POOL, holder: "Au perchoir", first: "Le perchoir est à prendre", k: "Reine de l'Hémicycle", emoji: "🏛️", end: "Elle a mis tout l'hémicycle d'accord." },
+  decon: { name: "Le Mode Déconstruit", pool: MEN_POOL, holder: "Sur le trône", first: "Le trône est à prendre", k: "Sur le trône du Mode Déconstruit", emoji: "🧠", end: "Déconstruit, mais pas trop. Parfait." },
   geek: { name: "Le Mode Geek", pool: GEEK_POOL, holder: "Sur le trône", first: "Le trône est à prendre", k: "Sur le trône du Mode Geek", emoji: "🎮", end: "Ta collection de figurines est fière de toi." },
+  wtf: { name: "Le Grand N'importe Quoi", pool: WTF_POOL, holder: "Sur le trône", first: "Le trône est à prendre", k: "Sur le trône du N'importe Quoi", emoji: "🤪", end: "T'as des goûts chelous. On valide." },
 };
+const isCup = m => Object.prototype.hasOwnProperty.call(CUP_INFO, m);
 const ROUND_NAMES = { 16: "16èmes de finale", 8: "8èmes de finale", 4: "Quarts de finale", 2: "Demi-finales", 1: "Finale" };
 const ROUND_SHORT = { 16: "16èmes", 8: "8èmes", 4: "Quarts", 2: "Demies", 1: "Finale" };
 
@@ -842,7 +971,7 @@ const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { c
 const pick = a => a[Math.floor(Math.random() * a.length)];
 let lastLine = "";
 function line(pool) { let l, n = 0; do { l = pick(pool); n++; } while (l === lastLine && n < 6); lastLine = l; return l; }
-const noLink = n => /^(Un|Une|Ton) /.test(n);
+const noLink = n => NO_LINK.has(n) || /^(Un|Une|Ton) /.test(n);
 const lookUrl = n => "https://www.google.com/search?tbm=isch&q=" + encodeURIComponent(LINK_QUERY[n] || n);
 const plural = (n, w) => n + " " + w + (n > 1 ? "s" : "");
 
@@ -854,17 +983,11 @@ function gamesPlayed(inc) {
   } catch (e) { return 0; }
 }
 
-function pickDuels(n) {
-  for (let t = 0; t < 400; t++) {
-    const used = new Set(), out = [];
-    for (const d of shuffle(WOMEN_DUELS)) {
-      if (used.has(d[0]) || used.has(d[1])) continue;
-      used.add(d[0]); used.add(d[1]);
-      out.push({ a: d[0], b: d[1], tag: d[2] });
-      if (out.length === n) return out;
-    }
-  }
-  return null;
+// Tirage 100 % au hasard ; le clin d'œil s'affiche quand deux noms liés tombent ensemble.
+function drawCup(pool, n) {
+  const p = shuffle(pool).slice(0, n * 2), out = [];
+  for (let i = 0; i < p.length; i += 2) out.push({ a: p[i], b: p[i + 1], tag: tagFor(p[i], p[i + 1]) });
+  return out;
 }
 
 /* ---------- ÉTAT ---------- */
@@ -880,8 +1003,8 @@ function start(mode, size) {
   if (needPseudo()) return;
   clearTimeout(hesTimer); clearTimeout(nextTimer);
   S = { mode, size, done: 0, history: [], clingy: gamesPlayed(false) >= 3 };
-  if (mode === "cup") {
-    S.round = pickDuels(size); S.idx = 0; S.winners = []; S.cur = []; S.rounds = []; S.total = size * 2 - 1;
+  if (isCup(mode)) {
+    S.round = drawCup(CUP_INFO[mode].pool, size); S.idx = 0; S.winners = []; S.cur = []; S.rounds = []; S.total = size * 2 - 1;
     showRound();
   } else {
     const pool = shuffle(HILL_INFO[mode].pool);
@@ -892,20 +1015,22 @@ function start(mode, size) {
 }
 
 function showRound() {
-  const n = S.round.length;
+  const n = S.round.length, info = CUP_INFO[S.mode];
   const card = $("roundcard");
-  $("rcount").textContent = (S.size === 8 ? "Coupe du Monde · Express" : "Coupe du Monde") + " · " + plural(S.done, "match") + " joué" + (S.done > 1 ? "s" : "");
+  $("rcount").textContent = info.name + (S.size === 8 ? " · Express" : "") + " · " + plural(S.done, "match") + " joué" + (S.done > 1 ? "s" : "");
   $("reyebrow").textContent = S.done === 0 ? "Coup d'envoi" : "Tour suivant";
   $("rtitle").textContent = n === 1 ? "C'est la finale !" : ROUND_NAMES[n];
-  $("rsub").textContent = n === 1 ? "Plus que 2 en lice. Une seule repartira avec la coupe." : (n * 2) + " qualifiées · " + plural(n, "match") + " à jouer";
+  $("rsub").textContent = n === 1 ? "Plus que 2 en lice. " + info.final : (n * 2) + " qualifiées · " + plural(n, "match") + " à jouer";
   $("rline").textContent = n === 1 ? FINAL_LINE : line(ROUND_LINES);
   const mu = $("matchups"); mu.innerHTML = "";
   S.round.forEach(m => {
-    const d = document.createElement("div"); d.className = "mu";
+    const d = document.createElement("div"); d.className = "mu" + (m.tag ? " wink" : "");
     const a = document.createElement("span"); a.textContent = m.a;
-    const v = document.createElement("i"); v.textContent = "VS";
+    const v = document.createElement("i"); v.textContent = m.tag ? "😉 VS" : "VS";
     const b = document.createElement("span"); b.textContent = m.b;
-    d.append(a, v, b); mu.appendChild(d);
+    d.append(a, v, b);
+    if (m.tag) { d.title = "Clin d'œil : " + m.tag; }
+    mu.appendChild(d);
   });
   show("round");
   card.classList.remove("pulse"); void card.offsetWidth; card.classList.add("pulse");
@@ -913,15 +1038,14 @@ function showRound() {
 }
 
 function current() {
-  if (S.mode === "cup") return S.round[S.idx];
+  if (isCup(S.mode)) { const m = S.round[S.idx]; return { a: m.a, b: m.b, wink: m.tag, info: "" }; }
   const info = HILL_INFO[S.mode], b = S.challengers[S.idx];
-  const curated = PAIR_TAGS[pairKey(S.queen, b)];
   const streak = S.streak ? info.holder + " · " + plural(S.streak, "victoire") + " d'affilée" : info.first;
-  return { a: S.queen, b, tag: curated ? curated + " · " + streak : streak };
+  return { a: S.queen, b, wink: tagFor(S.queen, b), info: streak };
 }
 
 function where() {
-  if (S.mode === "cup") return ROUND_NAMES[S.round.length];
+  if (isCup(S.mode)) return ROUND_NAMES[S.round.length];
   return HILL_INFO[S.mode].name;
 }
 
@@ -940,7 +1064,12 @@ function render() {
   $("where").textContent = where();
   $("count").textContent = "Match " + (S.done + 1) + " / " + S.total;
   $("bar").style.width = (S.done / S.total * 100) + "%";
-  $("tag").textContent = m.tag || "Le cœur a parlé";
+  const parts = [];
+  if (m.wink) parts.push("😉 Clin d'œil : " + m.wink);
+  if (m.info) parts.push(m.info);
+  $("tag").textContent = parts.join(" · ");
+  $("tag").className = "tag" + (m.wink ? " wink" : "");
+  $("tag").hidden = !parts.length;
   ["a", "b"].forEach(k => {
     const btn = $("v" + k);
     btn.className = "vote"; btn.disabled = false;
@@ -949,8 +1078,7 @@ function render() {
     btn.setAttribute("aria-label", "Voter pour " + m[k]);
     setLook($("l" + k), m[k]);
   });
-  const women = S.mode === "cup" || S.mode === "hill";
-  say(line(BEFORE.concat(women ? BEFORE_WOMEN : S.mode === "geek" ? BEFORE_GEEK : BEFORE_DECON)));
+  say(line(BEFORE.concat(BEFORE_BY_CAT[CAT[S.mode]] || [])));
   $("nextwrap").hidden = true;
   $("stats").hidden = true;
   S.view = {};
@@ -979,9 +1107,8 @@ function vote(side) {
   S.done++;
   $("bar").style.width = (S.done / S.total * 100) + "%";
 
-  const women = S.mode === "cup" || S.mode === "hill";
-  let t = line(AFTER.concat(women ? AFTER_WOMEN : []));
-  if (S.clingy && S.done === 3) t = CLINGY;
+  let t = DICTATORS.has(w) ? line(AFTER_DICTATOR) : line(AFTER.concat(AFTER_BY_CAT[CAT[S.mode]] || []));
+  if (S.clingy && S.done === 3 && !DICTATORS.has(w)) t = CLINGY;
   say(t);
 
   advance(m, w);
@@ -1028,14 +1155,14 @@ function showStats(m, w, counts, voters) {
 }
 
 function advance(m, w) {
-  if (S.mode === "cup") {
+  if (isCup(S.mode)) {
     S.cur.push({ a: m.a, b: m.b, w });
     S.winners.push(w); S.idx++;
     if (S.idx >= S.round.length) {
       S.rounds.push(S.cur); S.cur = [];
       if (S.winners.length === 1) { S.finished = true; S.champion = w; return; }
       const next = [];
-      for (let i = 0; i < S.winners.length; i += 2) next.push({ a: S.winners[i], b: S.winners[i + 1], tag: "" });
+      for (let i = 0; i < S.winners.length; i += 2) next.push({ a: S.winners[i], b: S.winners[i + 1], tag: tagFor(S.winners[i], S.winners[i + 1]) });
       S.pendingRound = next;
     }
   } else {
@@ -1056,20 +1183,22 @@ function goNext() {
 
 function finish() {
   gamesPlayed(true);
-  let k, champ, quote, sub, share;
+  let k, champ, quote, sub, share, toph;
   $("bracketpanel").hidden = true; $("recappanel").hidden = true;
-  if (S.mode === "cup") {
+  if (isCup(S.mode)) {
+    const info = CUP_INFO[S.mode];
     const final = S.history[S.history.length - 1];
-    k = "Championne du monde"; champ = S.champion; quote = pick(CHAMP_LINES);
+    k = info.k; champ = S.champion; quote = pick(info.quotes); toph = info.toph;
     sub = "Victoire en finale contre " + final.l;
     renderBracket();
     $("bracketpanel").hidden = false;
     const path = S.rounds.map(r => r.find(x => x.w === S.champion)).filter(Boolean)
       .map((x, i) => "• " + ROUND_SHORT[S.rounds[i].length] + " : bat " + (x.a === S.champion ? x.b : x.a)).join("\n");
-    share = "🏆 Le Grand Championnat du Beauf (" + (S.size === 16 ? "Coupe du Monde" : "Express") + ")\nMa championne du monde : " + S.champion + "\n" + path + "\nViens me contredire si t'oses.";
+    share = info.emoji + " " + info.name + (S.size === 8 ? " (Express)" : "") + " · Championnat du Beauf\n" + info.label + " : " + S.champion + "\n" + path + "\nViens me contredire si t'oses.";
   } else {
     const info = HILL_INFO[S.mode];
-    k = info.k; champ = S.queen; quote = info.end;
+    k = info.k; champ = S.queen; quote = DICTATORS.has(S.queen) ? "Euh… Tu vas devoir t'expliquer au comptoir." : info.end;
+    toph = "Le classement des potes · " + info.name;
     sub = "Encore debout après " + plural(S.streak, "match") + " d'affilée";
     if (S.best.name !== S.queen) sub += " · Record de la partie : " + S.best.name + " (" + S.best.streak + ")";
     const ol = $("recap"); ol.innerHTML = "";
@@ -1088,7 +1217,7 @@ function finish() {
   show("end");
 
   const token = S;
-  $("toph").textContent = S.mode === "cup" ? "Les championnes des potes" : "Le classement des potes · " + HILL_INFO[S.mode].name;
+  $("toph").textContent = toph;
   recordChampion(S.mode, champ).then(rows => {
     if (!rows || !rows.length || S !== token || $("end").hidden) return;
     const ol = $("top"); ol.innerHTML = "";
@@ -1118,21 +1247,24 @@ function renderBracket() {
     col.append(h, body); el.appendChild(col);
   });
   const col = document.createElement("div"); col.className = "bcol";
-  const h = document.createElement("div"); h.className = "bh"; h.textContent = "Championne";
+  const h = document.createElement("div"); h.className = "bh"; h.textContent = CUP_INFO[S.mode].bh;
   const body = document.createElement("div"); body.className = "bbody";
   const box = document.createElement("div"); box.className = "bm champ";
-  const s = document.createElement("span"); s.textContent = "🏆 " + S.champion; box.appendChild(s);
+  const s = document.createElement("span"); s.textContent = CUP_INFO[S.mode].emoji + " " + S.champion; box.appendChild(s);
   body.appendChild(box); col.append(h, body); el.appendChild(col);
 }
 
 /* ---------- CLASSEMENTS ---------- */
-let rankKind = "wins", rankReq = 0;
-async function openRanks(kind) {
+let rankKind = "wins", rankCat = "all", rankReq = 0;
+async function openRanks(kind, cat) {
   rankKind = kind;
+  if (cat) rankCat = cat;
   const isP = kind === "players";
   $("tabwins").setAttribute("aria-selected", String(!isP));
   $("tabplayers").setAttribute("aria-selected", String(isP));
-  $("rankh").textContent = isP ? "Les beaufs les plus actifs" : "Top des meilleures actrices & persos";
+  $("rankcats").hidden = isP;
+  document.querySelectorAll("#rankcats button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.cat === rankCat)));
+  $("rankh").textContent = isP ? "Les beaufs les plus actifs" : "Top des meilleures actrices & persos · " + CAT_LABEL[rankCat];
   $("ranklist").innerHTML = "";
   $("rankmsg").textContent = "Chargement du classement…";
   show("ranks");
@@ -1140,10 +1272,10 @@ async function openRanks(kind) {
   if (!st || !st.ranks) { $("rankmsg").textContent = "Classement indisponible pour l'instant. Recharge la page dans un moment."; return; }
   const req = ++rankReq;
   let rows = null;
-  try { rows = await st.ranks(kind); } catch (e) { rows = null; }
+  try { rows = await st.ranks(kind, rankCat); } catch (e) { rows = null; }
   if (req !== rankReq || $("ranks").hidden) return;
   if (!rows) { $("rankmsg").textContent = "Le classement n'a pas pu se charger. Réessaie dans un moment."; return; }
-  if (!rows.length) { $("rankmsg").textContent = isP ? "Personne n'a encore voté. Lance-toi, champion." : "Aucune victoire pour l'instant. Va jouer."; return; }
+  if (!rows.length) { $("rankmsg").textContent = isP ? "Personne n'a encore voté. Lance-toi, champion." : "Aucune victoire dans cette catégorie pour l'instant. Va jouer."; return; }
   $("rankmsg").textContent = "";
   const ol = $("ranklist");
   rows.forEach((r, i) => {
@@ -1163,14 +1295,19 @@ $("pseudook").onclick = savePseudo;
 $("pseudo").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); savePseudo(); } });
 startPosts();
 $("chatform").addEventListener("submit", sendPost);
-$("openwins").onclick = () => openRanks("wins");
+$("openwins").onclick = () => openRanks("wins", "all");
 $("openplayers").onclick = () => openRanks("players");
 $("tabwins").onclick = () => openRanks("wins");
+document.querySelectorAll("#rankcats button").forEach(b => { b.onclick = () => openRanks("wins", b.dataset.cat); });
 $("tabplayers").onclick = () => openRanks("players");
 $("ranksback").onclick = () => { rankReq++; show("menu"); };
 $("cup-full").onclick = () => start("cup", 16);
 $("cup-short").onclick = () => start("cup", 8);
 $("hill").onclick = () => start("hill");
+$("polcup-full").onclick = () => start("polcup", 16);
+$("polcup-short").onclick = () => start("polcup", 8);
+$("pol").onclick = () => start("pol");
+$("wtf").onclick = () => start("wtf");
 $("decon").onclick = () => start("decon");
 $("geek").onclick = () => start("geek");
 $("va").onclick = () => vote("a");
